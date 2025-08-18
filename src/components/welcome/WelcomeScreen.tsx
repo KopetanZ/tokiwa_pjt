@@ -11,10 +11,14 @@ export function WelcomeScreen() {
   const [schoolName, setSchoolName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   
-  const { login, isAuthenticated } = useAuth()
+  const { login, isAuthenticated, authMethod } = useAuth()
   const { addToast } = useToast()
 
+  console.log('🎮 WelcomeScreen: レンダリング', { isAuthenticated, isLoading, authMethod })
+
   const handleLogin = async () => {
+    console.log('🎮 WelcomeScreen: ログイン処理開始', { guestName, schoolName })
+    
     if (!guestName.trim() || !schoolName.trim()) {
       addToast({
         type: 'warning',
@@ -41,14 +45,18 @@ export function WelcomeScreen() {
 
     setIsLoading(true)
     try {
+      console.log('🎮 WelcomeScreen: login関数を呼び出し')
       await login(guestName, schoolName)
+      console.log('🎮 WelcomeScreen: ログイン成功')
       addToast({
         type: 'success',
         message: `${schoolName}へようこそ、${guestName}館長！`
       })
       // ダッシュボードにリダイレクト
+      console.log('🎮 WelcomeScreen: ダッシュボードにリダイレクト')
       window.location.href = '/dashboard'
     } catch (error) {
+      console.error('🎮 WelcomeScreen: ログイン失敗', error)
       addToast({
         type: 'error',
         message: 'ログインに失敗しました'
@@ -166,6 +174,52 @@ export function WelcomeScreen() {
           データはブラウザに保存されます
         </div>
       </div>
+
+      {/* デバッグ用ボタン（開発環境のみ） */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="text-center space-y-2 pt-4 border-t border-retro-gb-mid">
+          <div className="font-pixel text-xs text-retro-gb-mid">デバッグ情報</div>
+          
+          {/* 認証方法の表示 */}
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            認証方法: {authMethod === 'supabase' ? 'Supabase' : 'ローカルストレージ'}
+          </div>
+          
+          {/* 環境変数の状態 */}
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            SUPABASE_URL: {process.env.NEXT_PUBLIC_SUPABASE_URL ? '設定済み' : '未設定'}
+          </div>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            SUPABASE_ANON_KEY: {process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '設定済み' : '未設定'}
+          </div>
+          
+          <div className="flex gap-2 justify-center">
+            <PixelButton 
+              size="sm" 
+              variant="secondary"
+              onClick={() => {
+                const user = localStorage.getItem('tokiwa_user')
+                console.log('🔍 ローカルストレージ:', user)
+                alert(`ローカルストレージ: ${user || 'なし'}`)
+              }}
+            >
+              ストレージ確認
+            </PixelButton>
+            <PixelButton 
+              size="sm" 
+              variant="secondary"
+              onClick={() => {
+                localStorage.removeItem('tokiwa_user')
+                console.log('🧹 ローカルストレージをクリア')
+                alert('ローカルストレージをクリアしました')
+                window.location.reload()
+              }}
+            >
+              ストレージクリア
+            </PixelButton>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

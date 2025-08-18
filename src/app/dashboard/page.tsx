@@ -7,9 +7,42 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { formatMoney } from '@/lib/utils'
 
 export default function DashboardPage() {
-  const { user } = useAuth()
+  const { user, isLoading, authMethod } = useAuth()
 
-  if (!user) return null
+  console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, authMethod })
+
+  // ローディング中の表示
+  if (isLoading) {
+    console.log('📊 DashboardPage: ローディング中を表示')
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="font-pixel text-retro-gb-dark">ダッシュボードを読み込み中...</div>
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto animate-pulse"></div>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            認証方法: {authMethod === 'supabase' ? 'Supabase' : 'ローカルストレージ'}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ユーザーが存在しない場合
+  if (!user) {
+    console.log('📊 DashboardPage: ユーザーが存在しない、エラー表示')
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="font-pixel text-retro-gb-dark">ユーザー情報が見つかりません</div>
+          <PixelButton onClick={() => window.location.href = '/'}>
+            ホームに戻る
+          </PixelButton>
+        </div>
+      </div>
+    )
+  }
+
+  console.log('📊 DashboardPage: メインコンテンツを表示', { user })
 
   return (
     <div className="space-y-6">
