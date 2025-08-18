@@ -1,0 +1,198 @@
+'use client'
+
+import { PixelCard } from '@/components/ui/PixelCard'
+import { PixelButton } from '@/components/ui/PixelButton'
+import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
+import { TrainerCard } from '@/components/trainers/TrainerCard'
+import { TrainerSummary } from '@/types/trainer'
+import { useState } from 'react'
+
+// サンプルデータ
+const sampleTrainers: TrainerSummary[] = [
+  {
+    id: '1',
+    name: 'タケシ',
+    job: {
+      id: 1,
+      name: 'ranger',
+      nameJa: 'レンジャー',
+      level: 4,
+      experience: 320,
+      nextLevelExp: 500,
+      specializations: { capture: 1.25, exploration: 1.15, battle: 0.95 }
+    },
+    status: 'available',
+    party: {
+      pokemonCount: 3,
+      totalLevel: 15,
+      averageLevel: 5
+    },
+    trustLevel: 75,
+    salary: 3600,
+    spritePath: '/sprites/trainers/ranger_m.png'
+  },
+  {
+    id: '2', 
+    name: 'カスミ',
+    job: {
+      id: 3,
+      name: 'battler',
+      nameJa: 'バトラー',
+      level: 2,
+      experience: 180,
+      nextLevelExp: 300,
+      specializations: { battle: 1.25, strategy: 1.15, capture: 0.9 }
+    },
+    status: 'on_expedition',
+    party: {
+      pokemonCount: 2,
+      totalLevel: 8,
+      averageLevel: 4
+    },
+    trustLevel: 60,
+    salary: 3000,
+    spritePath: '/sprites/trainers/battler_f.png'
+  },
+  {
+    id: '3',
+    name: 'マチス',
+    job: {
+      id: 2,
+      name: 'breeder',
+      nameJa: 'ブリーダー',
+      level: 1,
+      experience: 50,
+      nextLevelExp: 150,
+      specializations: { breeding: 1.30, healing: 1.20, capture: 1.05 }
+    },
+    status: 'training',
+    party: {
+      pokemonCount: 1,
+      totalLevel: 3,
+      averageLevel: 3
+    },
+    trustLevel: 45,
+    salary: 2800,
+    spritePath: '/sprites/trainers/breeder_m.png'
+  }
+]
+
+export default function TrainersPage() {
+  const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
+
+  const filteredTrainers = sampleTrainers.filter(trainer => {
+    if (selectedTab === 'available') return trainer.status === 'available'
+    if (selectedTab === 'busy') return trainer.status !== 'available'
+    return true
+  })
+
+  return (
+    <div className="space-y-6">
+      {/* ヘッダー */}
+      <div className="flex items-center justify-between">
+        <h1 className="font-pixel-large text-retro-gb-dark">
+          トレーナー管理
+        </h1>
+        <PixelButton>
+          新しいトレーナーを雇う
+        </PixelButton>
+      </div>
+
+      {/* 統計サマリー */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <PixelCard title="総トレーナー数">
+          <div className="text-center">
+            <div className="font-pixel-large text-retro-gb-dark">3</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">/ 10 (最大)</div>
+          </div>
+        </PixelCard>
+
+        <PixelCard title="利用可能">
+          <div className="text-center">
+            <div className="font-pixel-large text-green-600">1</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">派遣可能</div>
+          </div>
+        </PixelCard>
+
+        <PixelCard title="派遣中">
+          <div className="text-center">
+            <div className="font-pixel-large text-orange-600">1</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">活動中</div>
+          </div>
+        </PixelCard>
+
+        <PixelCard title="月給総額">
+          <div className="text-center">
+            <div className="font-pixel-large text-retro-gb-dark">₽9,400</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">維持費</div>
+          </div>
+        </PixelCard>
+      </div>
+
+      {/* フィルタータブ */}
+      <PixelCard>
+        <div className="flex space-x-2">
+          {[
+            { key: 'all', label: '全て' },
+            { key: 'available', label: '利用可能' },
+            { key: 'busy', label: '活動中' }
+          ].map(tab => (
+            <PixelButton
+              key={tab.key}
+              size="sm"
+              variant={selectedTab === tab.key ? 'primary' : 'secondary'}
+              onClick={() => setSelectedTab(tab.key as any)}
+            >
+              {tab.label}
+            </PixelButton>
+          ))}
+        </div>
+      </PixelCard>
+
+      {/* トレーナーリスト */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {filteredTrainers.map(trainer => (
+          <TrainerCard 
+            key={trainer.id}
+            trainer={trainer}
+            onClick={() => {/* 詳細画面へ */}}
+            showStatus={true}
+            showParty={true}
+          />
+        ))}
+      </div>
+
+      {/* 雇用可能トレーナー */}
+      <PixelCard title="雇用可能なトレーナー">
+        <div className="space-y-4">
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            新しいトレーナーを雇って、スクールを拡大しましょう
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { name: 'エリカ', job: 'リサーチャー', cost: 5000, specialty: '発見特化' },
+              { name: 'ナツメ', job: 'メディック', cost: 8000, specialty: '回復特化' },
+              { name: 'カツラ', job: 'レンジャー', cost: 4500, specialty: '捕獲特化' }
+            ].map((candidate, index) => (
+              <div key={index} className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
+                <div className="font-pixel text-xs text-retro-gb-dark">
+                  {candidate.name}
+                </div>
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  {candidate.job} ({candidate.specialty})
+                </div>
+                <div className="font-pixel text-xs text-retro-gb-dark">
+                  雇用費: ₽{candidate.cost.toLocaleString()}
+                </div>
+                <PixelButton size="sm" className="w-full">
+                  雇用する
+                </PixelButton>
+              </div>
+            ))}
+          </div>
+        </div>
+      </PixelCard>
+    </div>
+  )
+}
