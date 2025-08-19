@@ -292,6 +292,7 @@ export const MOCK_ANALYSIS = [
 ]
 
 export const MOCK_GAME_DATA = {
+  profile: MOCK_PROFILE,
   pokemon: MOCK_POKEMON,
   trainers: MOCK_TRAINERS,
   expeditions: MOCK_EXPEDITIONS,
