@@ -661,10 +661,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   // モックモードの自動判定と初期化
   useEffect(() => {
+    console.log('🎮 GameContext: モックモード判定開始', {
+      hasSupabase: !!supabase,
+      isAuthenticated: state.isAuthenticated,
+      authLoading: state.authLoading,
+      hasUser: !!state.user,
+      isMockMode: state.isMockMode
+    })
+    
     // Supabaseが利用できない場合や、認証に失敗した場合はモックモードを有効化
     if (!supabase || (!state.isAuthenticated && !state.authLoading)) {
       const shouldEnableMockMode = !supabase || 
         (state.authLoading === false && !state.isAuthenticated && !state.user)
+      
+      console.log('🎮 GameContext: モックモード判定結果', { shouldEnableMockMode })
       
       if (shouldEnableMockMode && !state.isMockMode) {
         console.log('🎮 GameContext: モックモードを有効化します')
@@ -684,6 +694,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (!state.authLoading) {
       if (!state.isAuthenticated && !state.isMockMode) {
         // 認証されていない場合は、ローディング状態を終了
+        console.log('🎮 GameContext: 認証初期化完了、未認証状態')
+        dispatch({ type: 'SET_LOADING', payload: false })
+      } else if (state.isMockMode) {
+        console.log('🎮 GameContext: モックモード有効、初期化完了')
         dispatch({ type: 'SET_LOADING', payload: false })
       }
     }

@@ -12,7 +12,7 @@ export function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, login, authMethod } = useAuth()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -120,6 +120,35 @@ export function WelcomeScreen() {
         <div className="animate-pulse">
           <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
         </div>
+        
+        {/* ログアウトボタン */}
+        <div className="pt-4">
+          <PixelButton
+            onClick={() => {
+              if (window.confirm('ログアウトしますか？')) {
+                // ログアウト処理
+                localStorage.removeItem('tokiwa_user')
+                window.location.reload()
+              }
+            }}
+            variant="secondary"
+            size="sm"
+          >
+            ログアウト
+          </PixelButton>
+        </div>
+        
+        {/* 開発環境用の追加情報 */}
+        {isDevelopment && (
+          <div className="pt-2">
+            <div className="font-pixel text-xs text-retro-gb-light">
+              ユーザーID: {user?.id || 'unknown'}
+            </div>
+            <div className="font-pixel text-xs text-retro-gb-light">
+              認証方法: {authMethod}
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -238,6 +267,17 @@ export function WelcomeScreen() {
         <div className="text-center space-y-2 pt-4 border-t border-retro-gb-mid">
           <div className="font-pixel text-xs text-retro-gb-mid">デバッグ情報</div>
           
+          {/* 認証状態の詳細表示 */}
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            認証状態: {isAuthenticated ? '認証済み' : '未認証'}
+          </div>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            ローディング: {authLoading ? 'ロード中' : '完了'}
+          </div>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            ユーザー: {user ? `${user.guestName} (${user.id})` : 'なし'}
+          </div>
+          
           {/* 認証方法の表示 */}
           <div className="font-pixel text-xs text-retro-gb-mid">
             認証方法: {process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Supabase' : 'ローカルストレージ'}
@@ -274,6 +314,21 @@ export function WelcomeScreen() {
               }}
             >
               ストレージクリア
+            </PixelButton>
+            <PixelButton 
+              size="sm" 
+              variant="secondary"
+              onClick={() => {
+                console.log('🔍 現在の認証状態:', {
+                  isAuthenticated,
+                  authLoading,
+                  user,
+                  authMethod
+                })
+                alert(`認証状態: ${isAuthenticated ? '認証済み' : '未認証'}\nローディング: ${authLoading ? 'ロード中' : '完了'}\nユーザー: ${user ? user.guestName : 'なし'}`)
+              }}
+            >
+              状態確認
             </PixelButton>
           </div>
         </div>
