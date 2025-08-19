@@ -145,7 +145,7 @@ export default function SettingsPage() {
                   ゲームデータを完全にリセットする
                 </p>
               </div>
-              <PixelButton size="sm" variant="destructive">
+              <PixelButton size="sm" variant="danger">
                 リセット
               </PixelButton>
             </div>
@@ -155,7 +155,7 @@ export default function SettingsPage() {
 
       <div className="text-center">
         <PixelButton 
-          variant="destructive" 
+          variant="danger" 
           size="lg"
           onClick={handleLogout}
         >
