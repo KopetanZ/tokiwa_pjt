@@ -1,37 +1,34 @@
 export interface Database {
   public: {
     Tables: {
-      users: {
+      profiles: {
         Row: {
           id: string
-          guest_name: string
+          email: string | null
+          trainer_name: string
           school_name: string
           current_money: number
           total_reputation: number
-          ui_theme: string
-          settings: Record<string, any> | null
           created_at: string
           updated_at: string
         }
         Insert: {
-          id?: string
-          guest_name: string
+          id: string
+          email?: string | null
+          trainer_name: string
           school_name: string
           current_money?: number
           total_reputation?: number
-          ui_theme?: string
-          settings?: Record<string, any> | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
-          guest_name?: string
+          email?: string | null
+          trainer_name?: string
           school_name?: string
           current_money?: number
           total_reputation?: number
-          ui_theme?: string
-          settings?: Record<string, any> | null
           updated_at?: string
         }
       }
@@ -182,63 +179,70 @@ export interface Database {
           last_sync?: string
         }
       }
-      pokemon_instances: {
+      pokemon: {
         Row: {
           id: string
           user_id: string
-          species_id: number
-          trainer_id: string | null
-          nickname: string | null
+          dex_number: number
+          name: string
           level: number
-          experience: number
-          individual_values: Record<string, number>
-          current_hp: number | null
-          max_hp: number | null
-          status_condition: string
-          party_position: number | null
-          moves: any[]
+          hp: number
+          attack: number
+          defense: number
+          special_attack: number
+          special_defense: number
+          speed: number
+          types: string[]
+          nature: string | null
+          is_shiny: boolean
+          ivs: Record<string, any>
+          status: string
+          friendship: number
+          moves: string[]
           caught_at: string
-          caught_location: string | null
-          caught_by_trainer: string | null
-          created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          species_id: number
-          trainer_id?: string | null
-          nickname?: string | null
+          dex_number: number
+          name: string
           level?: number
-          experience?: number
-          individual_values?: Record<string, number>
-          current_hp?: number | null
-          max_hp?: number | null
-          status_condition?: string
-          party_position?: number | null
-          moves?: any[]
+          hp: number
+          attack: number
+          defense: number
+          special_attack: number
+          special_defense: number
+          speed: number
+          types: string[]
+          nature?: string | null
+          is_shiny?: boolean
+          ivs?: Record<string, any>
+          status?: string
+          friendship?: number
+          moves?: string[]
           caught_at?: string
-          caught_location?: string | null
-          caught_by_trainer?: string | null
-          created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          species_id?: number
-          trainer_id?: string | null
-          nickname?: string | null
+          dex_number?: number
+          name?: string
           level?: number
-          experience?: number
-          individual_values?: Record<string, number>
-          current_hp?: number | null
-          max_hp?: number | null
-          status_condition?: string
-          party_position?: number | null
-          moves?: any[]
-          caught_location?: string | null
-          caught_by_trainer?: string | null
+          hp?: number
+          attack?: number
+          defense?: number
+          special_attack?: number
+          special_defense?: number
+          speed?: number
+          types?: string[]
+          nature?: string | null
+          is_shiny?: boolean
+          ivs?: Record<string, any>
+          status?: string
+          friendship?: number
+          moves?: string[]
           updated_at?: string
         }
       }
@@ -413,44 +417,232 @@ export interface Database {
           updated_at?: string
         }
       }
-      economic_transactions: {
+      transactions: {
         Row: {
           id: string
           user_id: string
-          transaction_type: string
+          type: string
+          category: string
           amount: number
-          description: string | null
-          related_expedition_id: string | null
-          related_trainer_id: string | null
-          related_facility_id: string | null
-          balance_after: number
-          transaction_date: string
+          description: string
+          reference_id: string | null
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          transaction_type: string
+          type: string
+          category: string
           amount: number
-          description?: string | null
-          related_expedition_id?: string | null
-          related_trainer_id?: string | null
-          related_facility_id?: string | null
-          balance_after: number
-          transaction_date?: string
+          description: string
+          reference_id?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          transaction_type?: string
+          type?: string
+          category?: string
           amount?: number
-          description?: string | null
-          related_expedition_id?: string | null
-          related_trainer_id?: string | null
-          related_facility_id?: string | null
-          balance_after?: number
-          transaction_date?: string
+          description?: string
+          reference_id?: string | null
+        }
+      }
+      game_progress: {
+        Row: {
+          id: string
+          user_id: string
+          level: number
+          experience: number
+          next_level_exp: number
+          total_play_time: number
+          achievement_points: number
+          unlocked_features: string[]
+          difficulty: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          level?: number
+          experience?: number
+          next_level_exp?: number
+          total_play_time?: number
+          achievement_points?: number
+          unlocked_features?: string[]
+          difficulty?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          level?: number
+          experience?: number
+          next_level_exp?: number
+          total_play_time?: number
+          achievement_points?: number
+          unlocked_features?: string[]
+          difficulty?: string
+          updated_at?: string
+        }
+      }
+      game_balance: {
+        Row: {
+          id: string
+          user_id: string
+          trainer_growth_rate: number
+          pokemon_growth_rate: number
+          expedition_difficulty: number
+          economy_inflation: number
+          research_speed: number
+          facility_efficiency: number
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          trainer_growth_rate?: number
+          pokemon_growth_rate?: number
+          expedition_difficulty?: number
+          economy_inflation?: number
+          research_speed?: number
+          facility_efficiency?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          trainer_growth_rate?: number
+          pokemon_growth_rate?: number
+          expedition_difficulty?: number
+          economy_inflation?: number
+          research_speed?: number
+          facility_efficiency?: number
+          updated_at?: string
+        }
+      }
+      research_projects: {
+        Row: {
+          id: string
+          user_id: string
+          project_id: string
+          research_points: number
+          status: string
+          started_at: string | null
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          project_id: string
+          research_points?: number
+          status?: string
+          started_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          project_id?: string
+          research_points?: number
+          status?: string
+          started_at?: string | null
+          completed_at?: string | null
+          updated_at?: string
+        }
+      }
+      ai_analysis: {
+        Row: {
+          id: string
+          user_id: string
+          analysis_type: string
+          game_level: number
+          efficiency_score: number
+          profit_score: number
+          recommendations: string[]
+          predicted_outcomes: Record<string, any>
+          optimization_suggestions: Record<string, any>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          analysis_type: string
+          game_level: number
+          efficiency_score: number
+          profit_score: number
+          recommendations?: string[]
+          predicted_outcomes?: Record<string, any>
+          optimization_suggestions?: Record<string, any>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          analysis_type?: string
+          game_level?: number
+          efficiency_score?: number
+          profit_score?: number
+          recommendations?: string[]
+          predicted_outcomes?: Record<string, any>
+          optimization_suggestions?: Record<string, any>
+        }
+      }
+      interventions: {
+        Row: {
+          id: string
+          user_id: string
+          expedition_id: string
+          event_type: string
+          decision: string
+          outcome: string
+          rewards: Record<string, any>
+          resolved_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          expedition_id: string
+          event_type: string
+          decision: string
+          outcome: string
+          rewards?: Record<string, any>
+          resolved_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          expedition_id?: string
+          event_type?: string
+          decision?: string
+          outcome?: string
+          rewards?: Record<string, any>
+          resolved_at?: string
+        }
+      }
+      backups: {
+        Row: {
+          id: string
+          user_id: string
+          backup_data: Record<string, any>
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          backup_data: Record<string, any>
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          backup_data?: Record<string, any>
         }
       }
     }

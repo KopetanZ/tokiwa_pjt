@@ -21,11 +21,14 @@ export default function DashboardPage() {
   
   const [showEmergency, setShowEmergency] = useState(false)
   const [emergencyEvent, setEmergencyEvent] = useState<{
-    type: string
+    id: string
+    type: 'pokemon_encounter' | 'rare_item' | 'trainer_emergency' | 'weather_event'
     pokemon: string
     trainerName: string
     timeLeft: number
     successChance: number
+    timestamp: Date
+    resolved: boolean
   } | null>(null)
   const [emergencyTimer, setEmergencyTimer] = useState<NodeJS.Timeout | null>(null)
 
@@ -74,14 +77,17 @@ export default function DashboardPage() {
   const generateEmergencyEvent = () => {
     const pokemonList = ['ピカチュウ', 'イーブイ', 'ヒトカゲ', 'フシギダネ', 'ゼニガメ', 'ピッピ']
     const trainerList = ['カスミ', 'タケシ', 'マチス', 'エリカ', 'ナツメ']
-    const eventTypes = ['wild_encounter', 'rare_item', 'trainer_emergency']
+    const eventTypes: ('pokemon_encounter' | 'rare_item' | 'trainer_emergency' | 'weather_event')[] = ['pokemon_encounter', 'rare_item', 'trainer_emergency']
     
     const event = {
+      id: `emergency_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: eventTypes[Math.floor(Math.random() * eventTypes.length)],
       pokemon: pokemonList[Math.floor(Math.random() * pokemonList.length)],
       trainerName: trainerList[Math.floor(Math.random() * trainerList.length)],
       timeLeft: 30, // 30秒
-      successChance: Math.floor(Math.random() * 40) + 60 // 60-100%
+      successChance: Math.floor(Math.random() * 40) + 60, // 60-100%
+      timestamp: new Date(),
+      resolved: false
     }
     
     setEmergencyEvent(event)

@@ -6,6 +6,8 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { LiveExpeditionCard } from '@/components/expeditions/LiveExpeditionCard'
 import { InterventionPanel } from '@/components/expeditions/InterventionPanel'
 import { realtimeSystem } from '@/lib/realtime'
+import { getUserExpeditions, synchronizeRealtimeWithDatabase } from '@/lib/expedition-integration'
+import { useAuth } from '@/contexts/GameContext'
 import { useState, useEffect } from 'react'
 
 // デモ用サンプルデータ
@@ -29,20 +31,59 @@ export default function RealtimeExpeditionsPage() {
   }>({ isOpen: false, expeditionId: '' })
   
   const [activeExpeditions, setActiveExpeditions] = useState<any[]>([])
+  const [realExpeditionData, setRealExpeditionData] = useState<any>(null)
   const [stats, setStats] = useState({
     active: 0,
     interventionsRequired: 0,
     totalRewards: 0,
     successRate: 85
   })
+  
+  const { isMockMode, user, isAuthenticated } = useAuth()
 
   useEffect(() => {
+    // リアルタイムシステムとデータベースの同期を初期化
+    if (!isMockMode) {
+      synchronizeRealtimeWithDatabase()
+    }
+    
+    // 実際の派遣データを読み込み
+    async function loadRealExpeditions() {
+      if (!isMockMode && isAuthenticated && user) {
+        try {
+          const expeditionData = await getUserExpeditions(user)
+          setRealExpeditionData(expeditionData)
+          
+          // アクティブな派遣をリアルタイムシステムに登録
+          expeditionData.active.forEach((expedition: any) => {
+            const progress = realtimeSystem.getProgress(expedition.id)
+            if (!progress) {
+              const remainingHours = expedition.target_duration_hours - 
+                ((Date.now() - new Date(expedition.started_at).getTime()) / (1000 * 60 * 60))
+              
+              if (remainingHours > 0) {
+                realtimeSystem.startExpedition(
+                  expedition.id,
+                  expedition.trainer_id,
+                  Math.max(remainingHours * 60, 1) // 最低1分
+                )
+              }
+            }
+          })
+        } catch (error) {
+          console.error('派遣データ読み込みエラー:', error)
+        }
+      }
+    }
+    
+    loadRealExpeditions()
+    
     // アクティブ派遣を取得
     const active = realtimeSystem.getActiveExpeditions()
     setActiveExpeditions(active)
     
-    // デモ用：派遣が存在しない場合は自動開始
-    if (active.length === 0) {
+    // モックモードのみ：デモ派遣を自動開始
+    if (isMockMode && active.length === 0) {
       sampleExpeditions.forEach((exp, index) => {
         setTimeout(() => {
           realtimeSystem.startExpedition(
@@ -77,7 +118,7 @@ export default function RealtimeExpeditionsPage() {
     return () => {
       clearInterval(statsInterval)
     }
-  }, [])
+  }, [isMockMode, isAuthenticated, user])
 
   const handleInterventionOpen = (expeditionId: string) => {
     setInterventionPanel({ isOpen: true, expeditionId })
@@ -88,14 +129,20 @@ export default function RealtimeExpeditionsPage() {
   }
 
   const startNewExpedition = () => {
-    const newId = `exp_${Date.now()}`
-    const trainer = sampleExpeditions[Math.floor(Math.random() * sampleExpeditions.length)]
-    
-    realtimeSystem.startExpedition(
-      newId,
-      trainer.trainer.id,
-      Math.floor(Math.random() * 30) + 15 // 15-45分
-    )
+    if (isMockMode) {
+      // モックモードでのデモ派遣
+      const newId = `exp_${Date.now()}`
+      const trainer = sampleExpeditions[Math.floor(Math.random() * sampleExpeditions.length)]
+      
+      realtimeSystem.startExpedition(
+        newId,
+        trainer.trainer.id,
+        Math.floor(Math.random() * 30) + 15 // 15-45分
+      )
+    } else {
+      // 実際のモードでは派遣ページにリダイレクト
+      window.location.href = '/dashboard/expeditions'
+    }
   }
 
   return (
@@ -175,15 +222,34 @@ export default function RealtimeExpeditionsPage() {
         
         {activeExpeditions.length > 0 ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {sampleExpeditions.map(exp => (
-              <LiveExpeditionCard
-                key={exp.id}
-                expeditionId={exp.id}
-                trainerName={exp.trainer.name}
-                destination={exp.location.nameJa}
-                onInterventionOpen={() => handleInterventionOpen(exp.id)}
-              />
-            ))}
+            {isMockMode ? (
+              // モックモードでの表示
+              sampleExpeditions.map(exp => (
+                <LiveExpeditionCard
+                  key={exp.id}
+                  expeditionId={exp.id}
+                  trainerName={exp.trainer.name}
+                  destination={exp.location.nameJa}
+                  onInterventionOpen={() => handleInterventionOpen(exp.id)}
+                />
+              ))
+            ) : (
+              // 実際のデータでの表示
+              realExpeditionData?.active?.map((expedition: any) => {
+                const trainer = realExpeditionData.trainers?.find((t: any) => t.id === expedition.trainer_id)
+                const location = realExpeditionData.locations?.find((l: any) => l.id === expedition.location_id)
+                
+                return (
+                  <LiveExpeditionCard
+                    key={expedition.id}
+                    expeditionId={expedition.id}
+                    trainerName={trainer?.name || '不明'}
+                    destination={location?.location_name_ja || '不明'}
+                    onInterventionOpen={() => handleInterventionOpen(expedition.id)}
+                  />
+                )
+              }) || []
+            )}
           </div>
         ) : (
           <PixelCard>
@@ -192,7 +258,7 @@ export default function RealtimeExpeditionsPage() {
                 現在進行中の派遣はありません
               </div>
               <PixelButton onClick={startNewExpedition}>
-                デモ派遣を開始する
+                {isMockMode ? 'デモ派遣を開始する' : '派遣を開始する'}
               </PixelButton>
             </div>
           </PixelCard>

@@ -5,52 +5,95 @@ import { useAuth, useNotifications, useGameData } from '@/contexts/GameContext'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { useRouter } from 'next/navigation'
+import { SettingsManager, UserSettings, DEFAULT_SETTINGS } from '@/lib/settings-integration'
+import { getSafeGameData } from '@/lib/data-utils'
 
 export default function SettingsPage() {
-  const { user, isMockMode, signOut } = useAuth()
+  const { user, isMockMode, signOut, isAuthenticated } = useAuth()
   const { addNotification } = useNotifications()
   const gameData = useGameData()
   const router = useRouter()
 
-  // 設定状態管理（localStorage対応）
-  const [settings, setSettings] = useState({
-    audioEffects: true,
-    animations: true,
-    notifications: true
-  })
+  // 設定状態管理（データベース統合対応）
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
+  const [settingsManager, setSettingsManager] = useState<SettingsManager | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  
+  // 実際のゲームデータを安全に取得
+  const safeGameData = getSafeGameData(isMockMode, gameData, user)
 
-  // 設定をlocalStorageから読み込み
+  // 設定管理システムを初期化
   useEffect(() => {
-    const loadSettings = () => {
+    const initializeSettings = async () => {
+      setIsLoading(true)
+      
       try {
-        const savedSettings = localStorage.getItem('tokiwa-game-settings')
-        if (savedSettings) {
-          const parsed = JSON.parse(savedSettings)
-          setSettings(prev => ({
-            ...prev,
-            ...parsed
-          }))
-          console.log('設定を読み込みました:', parsed)
-        }
+        const manager = new SettingsManager(user, isMockMode)
+        setSettingsManager(manager)
+        
+        const loadedSettings = await manager.loadSettings()
+        setSettings(loadedSettings)
+        
+        console.log('設定を読み込みました:', loadedSettings)
+        
       } catch (error) {
-        console.error('設定の読み込みに失敗:', error)
+        console.error('設定の初期化に失敗:', error)
+        addNotification({
+          type: 'warning',
+          message: '設定の読み込みに失敗しました。デフォルト設定を使用します。'
+        })
+      } finally {
+        setIsLoading(false)
       }
     }
+    
+    initializeSettings()
+  }, [user, isMockMode, isAuthenticated])
 
-    loadSettings()
-  }, [])
-
-  // 設定をlocalStorageに保存
-  const saveSettings = (newSettings: typeof settings) => {
+  // 設定を保存（データベース＋localStorage統合）
+  const saveSettings = async (newSettings: UserSettings): Promise<boolean> => {
+    if (!settingsManager) {
+      console.error('設定管理システムが初期化されていません')
+      return false
+    }
+    
+    setIsSaving(true)
+    
     try {
-      localStorage.setItem('tokiwa-game-settings', JSON.stringify(newSettings))
-      console.log('設定を保存しました:', newSettings)
+      const result = await settingsManager.saveSettings(newSettings)
+      
+      if (result.success) {
+        setSettings(newSettings)
+        console.log('設定を保存しました:', newSettings)
+        return true
+      } else {
+        if (isMockMode) {
+          // モックモードでは警告レベル
+          addNotification({
+            type: 'info',
+            message: '設定を保存しました（ローカルのみ）'
+          })
+          setSettings(newSettings)
+          return true
+        } else {
+          addNotification({
+            type: 'warning',
+            message: `設定の保存に失敗: ${result.error}`
+          })
+          return false
+        }
+      }
+      
     } catch (error) {
-      console.error('設定の保存に失敗:', error)
+      console.error('設定保存エラー:', error)
       addNotification({
         type: 'warning',
-        message: '設定の保存に失敗しました'
+        message: '設定の保存中にエラーが発生しました'
       })
+      return false
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -64,48 +107,69 @@ export default function SettingsPage() {
   }
 
   // 設定変更ハンドラー
-  const handleSettingChange = (key: keyof typeof settings) => {
+  const handleSettingChange = async (key: keyof UserSettings, value?: any) => {
+    if (isSaving) return // 保存中は変更を無効化
+    
+    const newValue = value !== undefined ? value : !settings[key]
     const newSettings = {
       ...settings,
-      [key]: !settings[key]
+      [key]: newValue
     }
     
-    setSettings(newSettings)
-    saveSettings(newSettings)
+    const success = await saveSettings(newSettings)
     
-    const settingNames = {
-      audioEffects: '音声効果',
-      animations: 'アニメーション',
-      notifications: '通知'
+    if (success) {
+      const settingNames: Record<string, string> = {
+        audio_effects: '音声効果',
+        animations: 'アニメーション', 
+        notifications: '通知',
+        ui_theme: 'UIテーマ',
+        auto_save: '自動保存',
+        sound_volume: '音量',
+        notification_frequency: '通知頻度',
+        expedition_alerts: '派遣アラート',
+        pokemon_care_reminders: 'ポケモンケア通知',
+        economic_notifications: '経済通知',
+        language: '言語'
+      }
+      
+      if (typeof newValue === 'boolean') {
+        addNotification({
+          type: 'info',
+          message: `${settingNames[key] || key}を${newValue ? '有効' : '無効'}にしました`
+        })
+      } else {
+        addNotification({
+          type: 'info',
+          message: `${settingNames[key] || key}を変更しました`
+        })
+      }
+      
+      console.log(`設定変更: ${key} = ${newValue}`)
     }
-    
-    addNotification({
-      type: 'info',
-      message: `${settingNames[key]}を${!settings[key] ? '有効' : '無効'}にしました`
-    })
-    
-    console.log(`設定変更: ${key} = ${!settings[key]}`)
   }
 
   // データ管理ハンドラー
   const handleBackup = () => {
+    if (!settingsManager) {
+      addNotification({
+        type: 'warning',
+        message: '設定管理システムが初期化されていません'
+      })
+      return
+    }
+    
     try {
-      // バックアップデータの構築
+      // バックアップデータの構築（統合設定管理対応）
       const backupData = {
-        version: '1.0.0',
-        timestamp: new Date().toISOString(),
-        user: {
-          id: user?.id,
-          email: user?.email
-        },
-        settings: settings,
-        gameData: gameData ? {
-          trainers: gameData.trainers,
-          pokemon: gameData.pokemon,
-          expeditions: gameData.expeditions,
-          facilities: gameData.facilities,
-          transactions: gameData.transactions,
-          analysis: gameData.analysis
+        ...settingsManager.generateBackupData(),
+        gameData: safeGameData ? {
+          trainers: safeGameData.trainers,
+          pokemon: safeGameData.pokemon,
+          expeditions: safeGameData.expeditions,
+          facilities: safeGameData.facilities,
+          transactions: safeGameData.transactions,
+          analysis: safeGameData.analysis
         } : null,
         localStorage: {
           // localStorage内の全ゲーム関連データ
@@ -180,10 +244,14 @@ export default function SettingsPage() {
         
         if (!confirmRestore) return
         
-        // 設定の復元
-        if (backupData.settings) {
-          setSettings(backupData.settings)
-          saveSettings(backupData.settings)
+        // 設定の復元（統合設定管理対応）
+        if (backupData.settings && settingsManager) {
+          const result = await settingsManager.restoreFromBackup(backupData)
+          if (result.success) {
+            setSettings(backupData.settings)
+          } else {
+            throw new Error(result.error || '設定の復元に失敗しました')
+          }
         }
         
         // localStorageの復元
@@ -221,7 +289,7 @@ export default function SettingsPage() {
     document.body.removeChild(fileInput)
   }
 
-  const handleReset = () => {
+  const handleReset = async () => {
     const confirmText = 'RESET'
     const userInput = prompt(
       `⚠️ 危険な操作です ⚠️\n\n` +
@@ -259,14 +327,17 @@ export default function SettingsPage() {
           console.log(`削除: ${key}`)
         })
         
-        // 設定状態もリセット
-        const defaultSettings = {
-          audioEffects: true,
-          animations: true,
-          notifications: true
+        // 設定状態もリセット（統合設定管理対応）
+        if (settingsManager) {
+          const result = await settingsManager.resetToDefaults()
+          if (result.success) {
+            setSettings(DEFAULT_SETTINGS)
+          } else {
+            console.error('設定リセットエラー:', result.error)
+          }
+        } else {
+          setSettings(DEFAULT_SETTINGS)
         }
-        setSettings(defaultSettings)
-        saveSettings(defaultSettings)
         
         // Supabaseデータのクリア（モックモードでない場合）
         if (!isMockMode) {
@@ -348,61 +419,246 @@ export default function SettingsPage() {
         <div className="p-6">
           <h2 className="font-pixel text-lg text-retro-gb-dark mb-4">ゲーム設定</h2>
           
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-pixel text-retro-gb-dark">音声効果</h3>
-                <p className="font-pixel text-sm text-retro-gb-mid">
-                  ゲーム内の音声効果を有効にする
-                </p>
+          {isLoading ? (
+            <div className="text-center py-4">
+              <div className="font-pixel text-xs text-retro-gb-mid">
+                設定を読み込み中...
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={settings.audioEffects}
-                  onChange={() => handleSettingChange('audioEffects')}
-                />
-                <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
-              </label>
             </div>
+          ) : (
+            <div className="space-y-4">
+              {/* 音声効果 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-pixel text-retro-gb-dark">音声効果</h3>
+                  <p className="font-pixel text-sm text-retro-gb-mid">
+                    ゲーム内の音声効果を有効にする
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={settings.audio_effects}
+                    onChange={() => handleSettingChange('audio_effects')}
+                    disabled={isSaving}
+                  />
+                  <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                </label>
+              </div>
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-pixel text-retro-gb-dark">アニメーション</h3>
-                <p className="font-pixel text-sm text-retro-gb-mid">
-                  画面アニメーションを有効にする
-                </p>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={settings.animations}
-                  onChange={() => handleSettingChange('animations')}
-                />
-                <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
-              </label>
-            </div>
+              {/* 音量調整 */}
+              {settings.audio_effects && (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-pixel text-retro-gb-dark">音量</h3>
+                    <p className="font-pixel text-sm text-retro-gb-mid">
+                      音声効果の音量を調整
+                    </p>
+                  </div>
+                  <div className="w-32">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={settings.sound_volume}
+                      onChange={(e) => handleSettingChange('sound_volume', parseInt(e.target.value))}
+                      disabled={isSaving}
+                      className="w-full h-2 bg-retro-gb-light rounded-lg appearance-none cursor-pointer"
+                    />
+                    <div className="font-pixel text-xs text-retro-gb-mid text-center mt-1">
+                      {settings.sound_volume}%
+                    </div>
+                  </div>
+                </div>
+              )}
 
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-pixel text-retro-gb-dark">通知</h3>
-                <p className="font-pixel text-sm text-retro-gb-mid">
-                  ゲーム内通知を有効にする
-                </p>
+              {/* アニメーション */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-pixel text-retro-gb-dark">アニメーション</h3>
+                  <p className="font-pixel text-sm text-retro-gb-mid">
+                    画面アニメーションを有効にする
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={settings.animations}
+                    onChange={() => handleSettingChange('animations')}
+                    disabled={isSaving}
+                  />
+                  <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                </label>
               </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer" 
-                  checked={settings.notifications}
-                  onChange={() => handleSettingChange('notifications')}
-                />
-                <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
-              </label>
+
+              {/* UIテーマ */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-pixel text-retro-gb-dark">UIテーマ</h3>
+                  <p className="font-pixel text-sm text-retro-gb-mid">
+                    画面の表示テーマを選択
+                  </p>
+                </div>
+                <select
+                  value={settings.ui_theme}
+                  onChange={(e) => handleSettingChange('ui_theme', e.target.value)}
+                  disabled={isSaving}
+                  className="font-pixel text-xs bg-retro-gb-light border border-retro-gb-mid px-2 py-1"
+                >
+                  <option value="gameboy_green">ゲームボーイ（緑）</option>
+                  <option value="gameboy_classic">ゲームボーイ（クラシック）</option>
+                  <option value="gameboy_blue">ゲームボーイ（青）</option>
+                  <option value="dark">ダークモード</option>
+                  <option value="light">ライトモード</option>
+                </select>
+              </div>
+
+              {/* 自動保存 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-pixel text-retro-gb-dark">自動保存</h3>
+                  <p className="font-pixel text-sm text-retro-gb-mid">
+                    ゲームデータを自動的に保存
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={settings.auto_save}
+                    onChange={() => handleSettingChange('auto_save')}
+                    disabled={isSaving}
+                  />
+                  <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                </label>
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+      </PixelCard>
+
+      {/* 通知設定セクション */}
+      <PixelCard>
+        <div className="p-6">
+          <h2 className="font-pixel text-lg text-retro-gb-dark mb-4">通知設定</h2>
+          
+          {isLoading ? (
+            <div className="text-center py-4">
+              <div className="font-pixel text-xs text-retro-gb-mid">
+                設定を読み込み中...
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* 基本通知 */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-pixel text-retro-gb-dark">通知機能</h3>
+                  <p className="font-pixel text-sm text-retro-gb-mid">
+                    ゲーム内通知を有効にする
+                  </p>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={settings.notifications}
+                    onChange={() => handleSettingChange('notifications')}
+                    disabled={isSaving}
+                  />
+                  <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                </label>
+              </div>
+
+              {/* 詳細通知設定（通知が有効な場合のみ表示） */}
+              {settings.notifications && (
+                <>
+                  {/* 通知頻度 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-pixel text-retro-gb-dark">通知頻度</h3>
+                      <p className="font-pixel text-sm text-retro-gb-mid">
+                        通知の頻度を調整
+                      </p>
+                    </div>
+                    <select
+                      value={settings.notification_frequency}
+                      onChange={(e) => handleSettingChange('notification_frequency', e.target.value)}
+                      disabled={isSaving}
+                      className="font-pixel text-xs bg-retro-gb-light border border-retro-gb-mid px-2 py-1"
+                    >
+                      <option value="high">高頻度</option>
+                      <option value="medium">標準</option>
+                      <option value="low">低頻度</option>
+                      <option value="none">必要最小限</option>
+                    </select>
+                  </div>
+
+                  {/* 派遣アラート */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-pixel text-retro-gb-dark">派遣アラート</h3>
+                      <p className="font-pixel text-sm text-retro-gb-mid">
+                        派遣の完了や緊急事態を通知
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={settings.expedition_alerts}
+                        onChange={() => handleSettingChange('expedition_alerts')}
+                        disabled={isSaving}
+                      />
+                      <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                    </label>
+                  </div>
+
+                  {/* ポケモンケア通知 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-pixel text-retro-gb-dark">ポケモンケア通知</h3>
+                      <p className="font-pixel text-sm text-retro-gb-mid">
+                        ポケモンの体調管理を通知
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={settings.pokemon_care_reminders}
+                        onChange={() => handleSettingChange('pokemon_care_reminders')}
+                        disabled={isSaving}
+                      />
+                      <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                    </label>
+                  </div>
+
+                  {/* 経済通知 */}
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="font-pixel text-retro-gb-dark">経済通知</h3>
+                      <p className="font-pixel text-sm text-retro-gb-mid">
+                        収入や支出の重要な変化を通知
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        className="sr-only peer" 
+                        checked={settings.economic_notifications}
+                        onChange={() => handleSettingChange('economic_notifications')}
+                        disabled={isSaving}
+                      />
+                      <div className="w-11 h-6 bg-retro-gb-mid peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-retro-green"></div>
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </PixelCard>
 
@@ -450,13 +706,30 @@ export default function SettingsPage() {
         </div>
       </PixelCard>
 
+      {/* 保存状態インジケーター */}
+      {isSaving && (
+        <PixelCard>
+          <div className="text-center py-4">
+            <div className="font-pixel text-sm text-retro-gb-mid">
+              💾 設定を保存中...
+            </div>
+            {!isMockMode && (
+              <div className="font-pixel text-xs text-retro-gb-mid mt-2">
+                データベースに同期中
+              </div>
+            )}
+          </div>
+        </PixelCard>
+      )}
+
       <div className="text-center">
         <PixelButton 
           variant="danger" 
           size="lg"
           onClick={handleLogout}
+          disabled={isSaving}
         >
-          ログアウト
+          {isSaving ? '保存中...' : 'ログアウト'}
         </PixelButton>
       </div>
     </div>

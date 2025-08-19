@@ -6,7 +6,9 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { ExpeditionCard } from '@/components/expeditions/ExpeditionCard'
 import { LocationCard } from '@/components/expeditions/LocationCard'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
-import { useState } from 'react'
+import { getUserExpeditions, startRealExpedition } from '@/lib/expedition-integration'
+import { getSafeGameData } from '@/lib/data-utils'
+import { useState, useEffect } from 'react'
 
 // サンプルデータ
 const sampleActiveExpeditions = [
@@ -90,31 +92,114 @@ const sampleLocations = [
 
 export default function ExpeditionsPage() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'locations' | 'history'>('active')
+  const [realExpeditionData, setRealExpeditionData] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
   
-  const { isMockMode } = useAuth()
+  const { isMockMode, user, isAuthenticated } = useAuth()
   const gameData = useGameData()
   const { addNotification } = useNotifications()
   
+  // 実際のゲームデータを統一的に取得
+  const safeGameData = getSafeGameData(isMockMode, gameData, user)
+  
+  // 実際のデータベースから派遣情報を取得
+  useEffect(() => {
+    async function loadRealExpeditionData() {
+      if (isMockMode || !isAuthenticated || !user) return
+      
+      setIsLoading(true)
+      try {
+        const expeditionData = await getUserExpeditions(user)
+        setRealExpeditionData(expeditionData)
+      } catch (error) {
+        console.error('派遣データ読み込みエラー:', error)
+        addNotification({
+          type: 'error',
+          message: '派遣データの読み込みに失敗しました'
+        })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    
+    loadRealExpeditionData()
+  }, [isMockMode, isAuthenticated, user])
+  
   // 実際のゲームデータまたはサンプルデータを使用
-  const expeditions = isMockMode ? gameData.expeditions : sampleActiveExpeditions
+  const expeditions = isMockMode 
+    ? (safeGameData.expeditions || sampleActiveExpeditions)
+    : (realExpeditionData?.active || [])
+  
+  const locations = isMockMode
+    ? sampleLocations
+    : (realExpeditionData?.locations || sampleLocations)
+  
+  const availableTrainers = isMockMode
+    ? safeGameData.trainers || []
+    : (realExpeditionData?.trainers?.filter((t: any) => t.status === 'available') || [])
   
   // 統計計算
   const stats = {
     active: expeditions.length,
-    interventionRequired: expeditions.filter(exp => exp.hasInterventionRequired || 
-      (exp.status === 'active' && Math.random() > 0.7)).length,
-    todayEarnings: expeditions.reduce((sum, exp) => sum + (exp.estimatedReward || 0), 0),
-    availableLocations: 2 // 解放済みエリア数
+    interventionRequired: expeditions.filter((exp: any) => 
+      exp.hasInterventionRequired || 
+      (exp.status === 'active' && Math.random() > 0.7)
+    ).length,
+    todayEarnings: isMockMode 
+      ? expeditions.reduce((sum: number, exp: any) => sum + (exp.estimatedReward || 0), 0)
+      : (realExpeditionData?.completed?.reduce((sum: number, exp: any) => {
+          const today = new Date().toDateString()
+          const completedToday = exp.actual_return && new Date(exp.actual_return).toDateString() === today
+          return completedToday ? sum + (exp.result_summary?.totalReward || 0) : sum
+        }, 0) || 0),
+    availableLocations: locations.filter((loc: any) => 
+      isMockMode ? loc.isUnlocked : (loc.is_unlocked_by_default || false)
+    ).length
   }
   
-  const handleStartExpedition = (locationId: number) => {
-    addNotification({
-      type: 'success',
-      message: `新しい派遣を開始しました！`
-    })
+  const handleStartExpedition = async (locationId: number) => {
+    if (isMockMode) {
+      addNotification({
+        type: 'success',
+        message: `新しい派遣を開始しました！（モックモード）`
+      })
+      console.log('モック派遣開始:', { locationId })
+      return
+    }
     
-    // TODO: 実際の派遣開始処理を実装
-    console.log('派遣開始:', { locationId })
+    if (!user || !availableTrainers.length) {
+      addNotification({
+        type: 'error',
+        message: '利用可能なトレーナーがいません'
+      })
+      return
+    }
+    
+    const selectedTrainer = availableTrainers[0] // 簡単のため最初のトレーナーを選択
+    const result = await startRealExpedition(
+      user,
+      selectedTrainer.id,
+      locationId,
+      'balanced',
+      2 // 2時間の派遣
+    )
+    
+    if (result.success) {
+      addNotification({
+        type: 'success',
+        message: `${selectedTrainer.name}を派遣しました！`
+      })
+      // データを再読み込み
+      if (!isMockMode && isAuthenticated && user) {
+        const expeditionData = await getUserExpeditions(user)
+        setRealExpeditionData(expeditionData)
+      }
+    } else {
+      addNotification({
+        type: 'error',
+        message: result.error || '派遣開始に失敗しました'
+      })
+    }
   }
   
   const handleIntervention = (expeditionId: string) => {
@@ -194,7 +279,7 @@ export default function ExpeditionsPage() {
       {selectedTab === 'active' && (
         <div className="space-y-4">
           {expeditions.length > 0 ? (
-            expeditions.map(expedition => (
+            expeditions.map((expedition: any) => (
               <ExpeditionCard 
                 key={expedition.id}
                 expedition={expedition}
@@ -225,14 +310,41 @@ export default function ExpeditionsPage() {
 
       {/* 派遣先一覧 */}
       {selectedTab === 'locations' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {sampleLocations.map(location => (
-            <LocationCard
-              key={location.id}
-              location={location}
-              onStartExpedition={handleStartExpedition}
-            />
-          ))}
+        <div className="space-y-4">
+          {availableTrainers.length === 0 && !isMockMode && (
+            <PixelCard>
+              <div className="text-center py-4">
+                <div className="font-pixel text-xs text-retro-gb-mid mb-2">
+                  派遣を開始するには利用可能なトレーナーが必要です
+                </div>
+                <PixelButton size="sm" variant="secondary">
+                  トレーナーを雇用する
+                </PixelButton>
+              </div>
+            </PixelCard>
+          )}
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {locations.map((location: any) => (
+              <LocationCard
+                key={location.id}
+                location={{
+                  id: location.id,
+                  nameJa: location.location_name_ja || location.nameJa,
+                  distanceLevel: location.distance_level || location.distanceLevel,
+                  travelCost: location.travel_cost || location.travelCost,
+                  travelTimeHours: location.travel_time_hours || location.travelTimeHours,
+                  riskLevel: location.risk_level || location.riskLevel,
+                  baseRewardMoney: location.base_reward_money || location.baseRewardMoney,
+                  encounterTypes: location.encounter_types || location.encounterTypes || [],
+                  isUnlocked: isMockMode ? location.isUnlocked : (location.is_unlocked_by_default || false),
+                  description: location.description || `${location.location_name_ja || location.nameJa}での派遣`,
+                  backgroundImage: location.background_image || location.backgroundImage
+                }}
+                onStartExpedition={handleStartExpedition}
+              />
+            ))}
+          </div>
         </div>
       )}
 
@@ -265,7 +377,7 @@ export default function ExpeditionsPage() {
                 rewards: '₽600、経験値+80',
                 completedAt: '5時間前'
               }
-            ].map((history, index) => (
+            ].map((history: any, index: number) => (
               <div key={index} className="border-b border-retro-gb-mid last:border-b-0 pb-3 last:pb-0">
                 <div className="flex justify-between items-start mb-2">
                   <div className="font-pixel text-xs text-retro-gb-dark">

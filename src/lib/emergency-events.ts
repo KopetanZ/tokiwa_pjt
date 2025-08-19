@@ -36,6 +36,12 @@ export async function saveEmergencyEventResult(
   result: EmergencyEventResult
 ): Promise<boolean> {
   try {
+    // Supabaseが利用可能かチェック
+    if (!supabase) {
+      console.warn('⚠️ Supabaseが利用できません。モックモードで動作します。')
+      return true // モックモードでは成功として扱う
+    }
+
     // ポケモン捕獲の場合
     if (result.success && result.reward?.type === 'pokemon') {
       const newPokemon = {

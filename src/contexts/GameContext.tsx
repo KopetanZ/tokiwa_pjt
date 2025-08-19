@@ -2,9 +2,11 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useGameState } from '@/lib/realtime-hooks'
-import { supabase } from '@/lib/supabase'
+import { supabase, safeSupabaseOperation } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
 import { MOCK_USER, MOCK_GAME_DATA } from '@/lib/mock-data'
+import { useErrorHandler, DatabaseError } from '@/lib/error-handling'
+import { authSessionManager, AuthEventType, SessionState } from '@/lib/auth-integration'
 
 // ゲーム状態の型定義
 export interface GameContextState {
@@ -16,7 +18,14 @@ export interface GameContextState {
   // 接続状態
   isConnected: boolean
   isLoading: boolean
-  errors: any[]
+  errors: DatabaseError[]
+  errorHandler: ReturnType<typeof useErrorHandler>
+  
+  // セッション管理（新規追加）
+  session: SessionState
+  authLoading: boolean
+  sessionExpiry: Date | null
+  lastActivity: Date | null
   
   // ゲームデータ
   gameData: {
@@ -86,6 +95,10 @@ type GameAction =
   | { type: 'UPDATE_SETTINGS'; payload: Partial<GameContextState['settings']> }
   | { type: 'ENABLE_MOCK_MODE' }
   | { type: 'DISABLE_MOCK_MODE' }
+  | { type: 'UPDATE_SESSION'; payload: SessionState }
+  | { type: 'SET_AUTH_LOADING'; payload: boolean }
+  | { type: 'SESSION_EXPIRED' }
+  | { type: 'SESSION_WARNING'; payload: any }
 
 // 初期状態
 const initialState: GameContextState = {
@@ -95,6 +108,22 @@ const initialState: GameContextState = {
   isConnected: false,
   isLoading: true,
   errors: [],
+  errorHandler: null as any, // 実行時に設定される
+  
+  // セッション管理の初期状態
+  session: {
+    user: null,
+    session: null,
+    isAuthenticated: false,
+    isLoading: true,
+    error: null,
+    lastActivity: null,
+    sessionExpiry: null,
+    refreshAttempts: 0
+  },
+  authLoading: true,
+  sessionExpiry: null,
+  lastActivity: null,
   gameData: {
     profile: null,
     pokemon: [],
@@ -131,6 +160,55 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
         user: action.payload,
         isAuthenticated: !!action.payload,
         isLoading: false // ユーザー状態が設定されたらローディングを終了
+      }
+
+    case 'UPDATE_SESSION':
+      return {
+        ...state,
+        session: action.payload,
+        user: action.payload.user,
+        isAuthenticated: action.payload.isAuthenticated,
+        authLoading: action.payload.isLoading,
+        sessionExpiry: action.payload.sessionExpiry,
+        lastActivity: action.payload.lastActivity
+      }
+
+    case 'SET_AUTH_LOADING':
+      return {
+        ...state,
+        authLoading: action.payload
+      }
+
+    case 'SESSION_EXPIRED':
+      return {
+        ...state,
+        user: null,
+        isAuthenticated: false,
+        session: {
+          ...state.session,
+          user: null,
+          session: null,
+          isAuthenticated: false,
+          error: 'セッションが期限切れです'
+        }
+      }
+
+    case 'SESSION_WARNING':
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          notifications: [
+            ...state.ui.notifications,
+            {
+              id: `session_warning_${Date.now()}`,
+              type: 'warning',
+              message: action.payload.message,
+              timestamp: new Date(),
+              autoHide: false
+            }
+          ]
+        }
       }
     
     case 'SET_LOADING':
@@ -587,11 +665,77 @@ export function useNotifications() {
 
 export function useAuth() {
   const { state, actions } = useGame()
+  
+  // Supabaseが利用可能かチェック
+  const canUseSupabase = supabase !== null
+  
+  // モックモード判定の改善（セッション管理統合）
+  const isMockMode = !canUseSupabase || state.isMockMode || !state.session.isAuthenticated
+  
+  // ユーザーの判定（セッション情報を優先）
+  const user = isMockMode ? MOCK_USER : (state.session.user || state.user)
+  const isAuthenticated = isMockMode ? true : state.session.isAuthenticated
+  const isLoading = state.authLoading || state.session.isLoading
+
+  // 統合認証システムを使用
+  const signIn = useCallback(async (email: string, password: string) => {
+    const result = await authSessionManager.signIn(email, password)
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+  }, [])
+
+  const signUp = useCallback(async (email: string, password: string, trainerName?: string) => {
+    const result = await authSessionManager.signUp(email, password, {
+      trainer_name: trainerName
+    })
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+  }, [])
+
+  const signOut = useCallback(async () => {
+    const result = await authSessionManager.signOut()
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+  }, [])
+
+  const resetPassword = useCallback(async (email: string) => {
+    const result = await authSessionManager.resetPassword(email)
+    if (!result.success) {
+      throw new Error(result.error)
+    }
+  }, [])
+
+  const refreshToken = useCallback(async () => {
+    return await authSessionManager.refreshToken()
+  }, [])
+
   return {
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    isMockMode: state.isMockMode,
-    signOut: actions.signOut,
+    user,
+    isAuthenticated,
+    isLoading,
+    isMockMode,
+    canUseSupabase,
+    
+    // セッション情報（新規）
+    session: state.session,
+    sessionExpiry: state.sessionExpiry,
+    lastActivity: state.lastActivity,
+    authError: state.session.error,
+    
+    // 認証操作
+    signIn,
+    signUp,
+    signOut,
+    resetPassword,
+    refreshToken,
+    
+    // セッション管理
+    isSessionValid: authSessionManager.isSessionValid.bind(authSessionManager),
+    
+    // モック状態管理
     enableMockMode: actions.enableMockMode,
     disableMockMode: actions.disableMockMode
   }
