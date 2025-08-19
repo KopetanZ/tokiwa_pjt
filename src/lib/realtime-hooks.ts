@@ -467,7 +467,13 @@ export function useGameState(userId: string) {
   ].filter(error => error !== null)
 
   return {
-    profile,
+    profile: {
+      profile: profile.profile,
+      loading: profile.loading,
+      error: profile.error,
+      isConnected: profile.isConnected,
+      refetch: profile.refetch
+    },
     pokemon,
     trainers,
     expeditions,

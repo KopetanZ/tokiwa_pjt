@@ -20,7 +20,17 @@ export interface GameContextState {
   
   // ゲームデータ
   gameData: {
-    profile: any
+    profile: {
+      id: string
+      guest_name: string
+      school_name: string
+      current_money: number
+      total_reputation: number
+      ui_theme: string
+      settings: Record<string, any> | null
+      created_at: string
+      updated_at: string
+    } | null
     pokemon: any[]
     trainers: any[]
     expeditions: any[]
@@ -339,8 +349,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // ゲームデータ同期（モックモードでない場合のみ）
   useEffect(() => {
     if (state.user && !state.isMockMode) {
-      const newGameData = {
-        profile: gameStateHook.profile?.profile || null,
+      const newGameData: GameContextState['gameData'] = {
+        profile: gameStateHook.profile?.profile as GameContextState['gameData']['profile'] || null,
         pokemon: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon : [],
         trainers: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers : [],
         expeditions: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions : [],
@@ -371,7 +381,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [
     state.user?.id,
     state.isMockMode,
-    gameStateHook.profile?.profile?.id,
+    (gameStateHook.profile?.profile as GameContextState['gameData']['profile'])?.id,
     Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon.length : 0,
     Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers.length : 0,
     Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions.length : 0,

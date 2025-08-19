@@ -27,11 +27,17 @@ export const MOCK_USER: User = {
 // モックプロファイル
 export const MOCK_PROFILE = {
   id: MOCK_USER.id,
-  email: MOCK_USER.email,
-  trainer_name: '開発テスト館長',
+  guest_name: '開発テスト館長',
   school_name: 'トキワシティ訓練所（開発版）',
   current_money: 100000,
   total_reputation: 150,
+  ui_theme: 'default',
+  settings: {
+    autoSave: true,
+    realTimeUpdates: true,
+    notifications: true,
+    difficulty: 'normal'
+  },
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString()
 }
