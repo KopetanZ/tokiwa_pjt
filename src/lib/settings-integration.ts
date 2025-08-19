@@ -15,6 +15,8 @@ export interface UserSettings {
   pokemon_care_reminders: boolean
   economic_notifications: boolean
   language: 'ja' | 'en'
+  trainer_name: string
+  school_name: string
 }
 
 // デフォルト設定
@@ -29,7 +31,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   expedition_alerts: true,
   pokemon_care_reminders: true,
   economic_notifications: true,
-  language: 'ja'
+  language: 'ja',
+  trainer_name: 'トレーナー',
+  school_name: 'ポケモンスクール'
 }
 
 // localStorageキー
@@ -53,10 +57,11 @@ export async function getUserSettings(user: User): Promise<UserSettings> {
     }
 
     if (data) {
-      // プロファイルテーブルは基本情報のみを格納（設定はlocalStorageベース）
+      // プロファイルテーブルから基本情報を取得して設定に統合
       const dbSettings = {
         ...DEFAULT_SETTINGS,
-        // trainer_name, school_nameなどは基本情報として扱う
+        trainer_name: data.trainer_name || DEFAULT_SETTINGS.trainer_name,
+        school_name: data.school_name || DEFAULT_SETTINGS.school_name
       }
       
       // localStorageにも同期保存
