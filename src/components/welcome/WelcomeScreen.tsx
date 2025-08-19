@@ -10,12 +10,62 @@ export function WelcomeScreen() {
   const [guestName, setGuestName] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
-  console.log('🎮 WelcomeScreen: レンダリング', { isAuthenticated, isLoading, user, isDevelopment })
+  console.log('🎮 WelcomeScreen: レンダリング', { isAuthenticated, isLoading: authLoading, user, isDevelopment })
+
+  // 認証の読み込み中
+  if (authLoading) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          起動中... しばらくお待ちください
+        </div>
+        <div className="animate-pulse space-y-2">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+          <div className="w-12 h-2 bg-retro-gb-light mx-auto"></div>
+        </div>
+        <div className="font-pixel text-xs text-retro-gb-light">
+          古いセッション情報をクリア中...
+        </div>
+      </div>
+    )
+  }
+
+  // エラーが発生した場合
+  if (error) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-red-600">
+          起動エラーが発生しました
+        </div>
+        <div className="font-pixel text-sm text-retro-gb-mid">
+          {error}
+        </div>
+        <div className="space-y-2">
+          <PixelButton 
+            onClick={() => window.location.reload()} 
+            size="sm"
+          >
+            再試行
+          </PixelButton>
+          <div className="font-pixel text-xs text-retro-gb-light">
+            または、ブラウザのキャッシュをクリアしてください
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const handleLogin = async () => {
     console.log('🎮 WelcomeScreen: ログイン処理開始', { guestName, schoolName })

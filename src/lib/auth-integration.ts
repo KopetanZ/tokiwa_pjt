@@ -72,6 +72,9 @@ export class AuthSessionManager {
     if (this.isInitialized) return
 
     try {
+      // 古いセッション情報をクリア
+      await this.clearAllSessionData()
+      
       // 保存されたセッション状態を復元
       await this.restoreSessionState()
 
@@ -397,6 +400,27 @@ export class AuthSessionManager {
   private clearSessionStorage(): void {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(SESSION_CONFIG.sessionStorageKey)
+    }
+  }
+
+  // すべてのセッションデータをクリア
+  private async clearAllSessionData(): Promise<void> {
+    try {
+      // ローカルストレージをクリア
+      localStorage.removeItem(this.sessionState.sessionStorageKey)
+      localStorage.removeItem('tokiwa_user')
+      
+      // セッションストレージをクリア
+      sessionStorage.clear()
+      
+      // Supabaseのセッションもクリア
+      if (supabase) {
+        await supabase.auth.signOut()
+      }
+      
+      console.log('すべてのセッションデータをクリアしました')
+    } catch (error) {
+      console.warn('セッションデータクリア中にエラー:', error)
     }
   }
 

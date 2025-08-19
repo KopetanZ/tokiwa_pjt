@@ -25,6 +25,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       console.log('🔐 AuthProvider: 初期化開始')
       
+      // 古いセッション情報をクリア
+      try {
+        localStorage.removeItem('tokiwa_user')
+        localStorage.removeItem('tokiwa-session-state')
+        sessionStorage.clear()
+        console.log('🔐 AuthProvider: 古いセッション情報をクリアしました')
+      } catch (error) {
+        console.warn('🔐 AuthProvider: セッションクリア中にエラー:', error)
+      }
+      
       // Supabaseの利用可能性をチェック
       const supabaseAvailable = isSupabaseAvailable()
       console.log('🔐 AuthProvider: Supabase利用可能:', supabaseAvailable)
@@ -34,6 +44,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           console.log('🔐 AuthProvider: Supabaseセッションを確認中...')
           if (supabase) {
+            // Supabaseのセッションもクリア
+            await supabase.auth.signOut()
+            console.log('🔐 AuthProvider: Supabaseセッションをクリアしました')
+            
             const { data: { session }, error } = await supabase.auth.getSession()
             
             if (error) {

@@ -391,36 +391,84 @@ const GameContext = createContext<{
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, initialState)
   
-  // リアルタイムゲームデータ（モックモードでない場合のみ）
-  const shouldUseRealData = !state.isMockMode && state.user?.id
-  console.log('🎮 GameContext データソース:', { 
-    isMockMode: state.isMockMode, 
-    hasUser: !!state.user?.id, 
-    shouldUseRealData,
-    userId: state.user?.id?.substring(0, 8) + '...' || 'none'
-  })
-  const gameStateHook = useGameState(shouldUseRealData ? state.user!.id : '')
+  // エラーハンドラーの初期化
+  const errorHandler = useErrorHandler()
+  
+  // エラーハンドラーを状態に設定（初期状態では空の配列）
+  useEffect(() => {
+    // エラーハンドラーが利用可能になったら初期化完了
+    if (errorHandler) {
+      dispatch({ type: 'SET_LOADING', payload: false })
+    }
+  }, [errorHandler])
+
+  // データソース判定の改善
+  const shouldUseRealData = useMemo(() => {
+    // ユーザーが存在し、認証済みで、モックモードでない場合のみ
+    return !state.isMockMode && state.isAuthenticated && !!state.user?.id
+  }, [state.isMockMode, state.isAuthenticated, state.user?.id])
+
+  // デバッグ用ログ（本番環境では削除）
+  useEffect(() => {
+    console.log('🎮 GameContext データソース:', {
+      isMockMode: state.isMockMode,
+      hasUser: !!state.user,
+      shouldUseRealData,
+      userId: state.user?.id ? `${state.user.id.substring(0, 8)}...` : 'none',
+      isAuthenticated: state.isAuthenticated,
+      authLoading: state.authLoading
+    })
+  }, [state.isMockMode, state.user, shouldUseRealData, state.isAuthenticated, state.authLoading])
+
+  const gameStateHook = useGameState(shouldUseRealData && state.user?.id ? state.user.id : '')
 
   // ユーザー認証状態監視
   useEffect(() => {
     if (supabase) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        dispatch({ type: 'SET_USER', payload: session?.user ?? null })
-        // セッションが存在する場合は認証済みとして設定
-        if (session?.user) {
+      // 初期セッション取得
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        if (error) {
+          console.error('🔐 GameContext: セッション取得エラー:', error)
+          dispatch({ type: 'SET_USER', payload: null })
           dispatch({ type: 'SET_LOADING', payload: false })
+          dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+        } else if (session?.user) {
+          console.log('🔐 GameContext: セッション発見:', session.user.email)
+          dispatch({ type: 'SET_USER', payload: session.user })
+          dispatch({ type: 'SET_LOADING', payload: false })
+          dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+        } else {
+          console.log('🔐 GameContext: セッションなし')
+          dispatch({ type: 'SET_USER', payload: null })
+          dispatch({ type: 'SET_LOADING', payload: false })
+          dispatch({ type: 'SET_AUTH_LOADING', payload: false })
         }
       })
 
+      // 認証状態変更の監視
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        dispatch({ type: 'SET_USER', payload: session?.user ?? null })
-        // 認証状態が変更されたらローディング状態を更新
-        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+        console.log('🔐 GameContext: 認証状態変更:', event, session?.user?.email)
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          dispatch({ type: 'SET_USER', payload: session.user })
           dispatch({ type: 'SET_LOADING', payload: false })
+          dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+        } else if (event === 'SIGNED_OUT') {
+          dispatch({ type: 'SET_USER', payload: null })
+          dispatch({ type: 'SET_LOADING', payload: false })
+          dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+        } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+          dispatch({ type: 'SET_USER', payload: session.user })
         }
       })
 
       return () => subscription.unsubscribe()
+    } else {
+      // Supabaseが利用できない場合はモックモードを有効化
+      console.warn('🔐 GameContext: Supabaseが利用できません。モックモードを有効化します。')
+      dispatch({ type: 'ENABLE_MOCK_MODE' })
+      dispatch({ type: 'SET_LOADING', payload: false })
+      dispatch({ type: 'SET_AUTH_LOADING', payload: false })
     }
   }, [])
 
@@ -610,6 +658,25 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       dispatch({ type: 'SET_CURRENT_PAGE', payload: page })
     }
   }
+
+  // モックモードの自動判定と初期化
+  useEffect(() => {
+    // Supabaseが利用できない場合や、認証に失敗した場合はモックモードを有効化
+    if (!supabase || (!state.isAuthenticated && !state.authLoading)) {
+      const shouldEnableMockMode = !supabase || 
+        (state.authLoading === false && !state.isAuthenticated && !state.user)
+      
+      if (shouldEnableMockMode && !state.isMockMode) {
+        console.log('🎮 GameContext: モックモードを有効化します')
+        dispatch({ type: 'ENABLE_MOCK_MODE' })
+        
+        // モックユーザーを設定
+        dispatch({ type: 'SET_USER', payload: MOCK_USER as any })
+        dispatch({ type: 'SET_LOADING', payload: false })
+        dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+      }
+    }
+  }, [supabase, state.isAuthenticated, state.authLoading, state.user, state.isMockMode])
 
   return (
     <GameContext.Provider value={{ state, dispatch, actions }}>

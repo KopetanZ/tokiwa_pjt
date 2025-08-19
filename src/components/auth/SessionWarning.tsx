@@ -98,33 +98,85 @@ export function SessionWarningManager() {
     minutesInactive: 0
   })
 
-  const { signOut } = useAuth()
+  const { logout } = useAuth()
 
   useEffect(() => {
-    const handleSessionWarning = (data: any) => {
-      setWarning({
-        isVisible: true,
-        message: data.message,
-        minutesInactive: data.minutesInactive
-      })
+    // セッション警告の監視を設定
+    const checkSessionWarning = () => {
+      try {
+        const sessionState = localStorage.getItem('tokiwa-session-state')
+        if (sessionState) {
+          const parsed = JSON.parse(sessionState)
+          if (parsed.sessionExpiry && new Date(parsed.sessionExpiry) < new Date()) {
+            setWarning({
+              isVisible: true,
+              message: 'セッションが期限切れです',
+              minutesInactive: 0
+            })
+          }
+        }
+      } catch (error) {
+        console.warn('セッション警告チェックエラー:', error)
+        // エラーの場合は警告を非表示にする
+        setWarning({
+          isVisible: false,
+          message: '',
+          minutesInactive: 0
+        })
+      }
     }
 
-    authSessionManager.addEventListener('session_warning', handleSessionWarning)
+    // 初期チェック
+    checkSessionWarning()
 
-    return () => {
-      authSessionManager.removeEventListener('session_warning', handleSessionWarning)
-    }
+    // 定期的にチェック
+    const interval = setInterval(checkSessionWarning, 30000) // 30秒ごと
+
+    return () => clearInterval(interval)
   }, [])
 
   const handleExtend = () => {
-    setWarning({ isVisible: false, message: '', minutesInactive: 0 })
-    // ユーザーアクティビティを記録（マウスクリックイベント）
-    document.body.click()
+    // セッション延長処理
+    try {
+      const sessionState = localStorage.getItem('tokiwa-session-state')
+      if (sessionState) {
+        const parsed = JSON.parse(sessionState)
+        parsed.lastActivity = new Date().toISOString()
+        parsed.sessionExpiry = new Date(Date.now() + 30 * 60 * 1000).toISOString() // 30分延長
+        localStorage.setItem('tokiwa-session-state', JSON.stringify(parsed))
+      }
+    } catch (error) {
+      console.warn('セッション延長エラー:', error)
+    }
+    
+    setWarning({
+      isVisible: false,
+      message: '',
+      minutesInactive: 0
+    })
   }
 
-  const handleSignOut = async () => {
-    setWarning({ isVisible: false, message: '', minutesInactive: 0 })
-    await signOut()
+  const handleSignOut = () => {
+    // セッション情報をクリア
+    try {
+      localStorage.removeItem('tokiwa-session-state')
+      sessionStorage.clear()
+    } catch (error) {
+      console.warn('セッションクリアエラー:', error)
+    }
+    
+    setWarning({
+      isVisible: false,
+      message: '',
+      minutesInactive: 0
+    })
+    
+    logout()
+  }
+
+  // 警告が非表示の場合は何も表示しない
+  if (!warning.isVisible) {
+    return null
   }
 
   return (
