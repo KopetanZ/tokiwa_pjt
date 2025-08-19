@@ -1,16 +1,20 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { gameLogic } from '@/lib/gameLogic'
 import { formatMoney } from '@/lib/utils'
+import { useNotifications } from '@/contexts/GameContext'
 
 export default function AnalyticsPage() {
   const [gameState, setGameState] = useState<any>(null)
   const [gameSummary, setGameSummary] = useState<any>(null)
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week')
+  const { addNotification } = useNotifications()
+  const router = useRouter()
 
   useEffect(() => {
     loadGameData()
@@ -28,6 +32,30 @@ export default function AnalyticsPage() {
   const handleEmergencyEvent = () => {
     const event = gameLogic.generateEmergencyEvent()
     alert(`🚨 ${event.description}\n深刻度: ${event.severity}\n持続時間: ${event.duration}分`)
+  }
+
+  const handleDetailedReport = () => {
+    addNotification({
+      type: 'info',
+      message: '詳細レポートを生成しています...'
+    })
+    
+    // 詳細レポートの生成処理をシミュレート
+    setTimeout(() => {
+      addNotification({
+        type: 'success',
+        message: '📊 詳細レポートが生成されました'
+      })
+      console.log('詳細レポート生成:', {
+        period: selectedPeriod,
+        gameState,
+        gameSummary,
+        timestamp: new Date().toISOString()
+      })
+    }, 2000)
+    
+    console.log('詳細レポート処理を実行')
+    // 実際の詳細レポート生成処理をここに追加
   }
 
   if (!gameState || !gameSummary) {
@@ -64,7 +92,7 @@ export default function AnalyticsPage() {
           <PixelButton size="sm" variant="secondary" onClick={handleEmergencyEvent}>
             緊急イベント生成
           </PixelButton>
-          <PixelButton>
+          <PixelButton onClick={handleDetailedReport}>
             詳細レポート
           </PixelButton>
         </div>

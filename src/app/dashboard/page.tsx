@@ -1,16 +1,205 @@
 'use client'
 
-import { useAuth, useGameData } from '@/contexts/GameContext'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth, useGameData, useNotifications } from '@/contexts/GameContext'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { formatMoney } from '@/lib/utils'
-import { MOCK_PROFILE } from '@/lib/mock-data'
+import { getSafeGameData, calculateGameStats } from '@/lib/data-utils'
+import { saveEmergencyEventResult, processEmergencyEvent, processMockEmergencyEvent } from '@/lib/emergency-events'
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, isMockMode } = useAuth()
+  const { user, isAuthenticated, isMockMode, isLoading: authLoading } = useAuth()
   const gameData = useGameData()
-  const isLoading = false // 一時的にfalse固定
+  const { addNotification } = useNotifications()
+  const router = useRouter()
+  
+  // ローディング状態の統合判定
+  const isLoading = authLoading || (!isMockMode && isAuthenticated && !gameData)
+  
+  const [showEmergency, setShowEmergency] = useState(false)
+  const [emergencyEvent, setEmergencyEvent] = useState<{
+    type: string
+    pokemon: string
+    trainerName: string
+    timeLeft: number
+    successChance: number
+  } | null>(null)
+  const [emergencyTimer, setEmergencyTimer] = useState<NodeJS.Timeout | null>(null)
+
+  // クイックアクションハンドラー
+  const handleNewExpedition = () => {
+    addNotification({
+      type: 'info',
+      message: '新しい派遣画面に移動します'
+    })
+    router.push('/dashboard/expeditions')
+  }
+
+  const handleHireTrainer = () => {
+    addNotification({
+      type: 'info',
+      message: 'トレーナー雇用画面に移動します'
+    })
+    router.push('/dashboard/trainers')
+  }
+
+  const handleUpgradeFacility = () => {
+    addNotification({
+      type: 'info',
+      message: '施設強化画面に移動します'
+    })
+    router.push('/dashboard/facilities')
+  }
+
+  const handleManagePokemon = () => {
+    addNotification({
+      type: 'info',
+      message: 'ポケモン管理画面に移動します'
+    })
+    router.push('/dashboard/pokemon')
+  }
+
+  const handleViewDetails = () => {
+    addNotification({
+      type: 'info',
+      message: '詳細分析画面に移動します'
+    })
+    router.push('/dashboard/analytics')
+  }
+
+  // 緊急イベント生成
+  const generateEmergencyEvent = () => {
+    const pokemonList = ['ピカチュウ', 'イーブイ', 'ヒトカゲ', 'フシギダネ', 'ゼニガメ', 'ピッピ']
+    const trainerList = ['カスミ', 'タケシ', 'マチス', 'エリカ', 'ナツメ']
+    const eventTypes = ['wild_encounter', 'rare_item', 'trainer_emergency']
+    
+    const event = {
+      type: eventTypes[Math.floor(Math.random() * eventTypes.length)],
+      pokemon: pokemonList[Math.floor(Math.random() * pokemonList.length)],
+      trainerName: trainerList[Math.floor(Math.random() * trainerList.length)],
+      timeLeft: 30, // 30秒
+      successChance: Math.floor(Math.random() * 40) + 60 // 60-100%
+    }
+    
+    setEmergencyEvent(event)
+    setShowEmergency(true)
+    
+    console.log('緊急イベント発生:', event)
+    
+    // タイマー開始
+    startEmergencyTimer()
+  }
+
+  // 緊急イベントタイマー
+  const startEmergencyTimer = () => {
+    if (emergencyTimer) {
+      clearInterval(emergencyTimer)
+    }
+    
+    const timer = setInterval(() => {
+      setEmergencyEvent(prev => {
+        if (!prev || prev.timeLeft <= 1) {
+          setShowEmergency(false)
+          addNotification({
+            type: 'warning',
+            message: '⏰ 緊急イベントの時間切れです'
+          })
+          clearInterval(timer)
+          return null
+        }
+        return { ...prev, timeLeft: prev.timeLeft - 1 }
+      })
+    }, 1000)
+    
+    setEmergencyTimer(timer)
+  }
+
+  // コンポーネントマウント時とクリーンアップ
+  useEffect(() => {
+    // 60秒に1回緊急イベントを発生させる（テスト用）
+    const eventGenerator = setInterval(() => {
+      if (!showEmergency && Math.random() < 0.3) { // 30%の確率
+        generateEmergencyEvent()
+      }
+    }, 60000) // 60秒間隔
+
+    // 初回は30秒後に発生
+    const initialEvent = setTimeout(() => {
+      if (!showEmergency) {
+        generateEmergencyEvent()
+      }
+    }, 30000)
+
+    return () => {
+      clearInterval(eventGenerator)
+      clearTimeout(initialEvent)
+      if (emergencyTimer) {
+        clearInterval(emergencyTimer)
+      }
+    }
+  }, [showEmergency, emergencyTimer])
+
+  // 緊急通知ハンドラー（改良版）
+  const handleEmergencyChoice = async (choice: 'capture' | 'observe' | 'ignore') => {
+    if (!emergencyEvent) return
+    
+    try {
+      // イベント処理
+      const result = isMockMode 
+        ? processMockEmergencyEvent(emergencyEvent, choice)
+        : processEmergencyEvent(emergencyEvent, choice)
+      
+      // 通知表示
+      addNotification({
+        type: result.success ? 'success' : 'warning',
+        message: `${result.success ? '🎉' : '😞'} ${result.message}`
+      })
+      
+      // データベース保存（モックモードでない場合）
+      if (!isMockMode && user && result.success) {
+        const saved = await saveEmergencyEventResult(user, emergencyEvent, result)
+        
+        if (saved) {
+          addNotification({
+            type: 'info',
+            message: '📊 ゲームデータが更新されました'
+          })
+        } else {
+          addNotification({
+            type: 'warning',
+            message: 'データ保存に失敗しました'
+          })
+        }
+      }
+      
+      console.log('緊急イベント結果:', {
+        choice,
+        result,
+        pokemon: emergencyEvent.pokemon,
+        trainer: emergencyEvent.trainerName
+      })
+      
+    } catch (error) {
+      console.error('緊急イベント処理エラー:', error)
+      addNotification({
+        type: 'warning',
+        message: 'イベント処理中にエラーが発生しました'
+      })
+    } finally {
+      // クリーンアップ
+      setShowEmergency(false)
+      if (emergencyTimer) {
+        clearInterval(emergencyTimer)
+      }
+    }
+  }
+
+  // 後方互換性のための旧ハンドラー
+  const handleCapturePokemon = () => handleEmergencyChoice('capture')
+  const handleMissPokemon = () => handleEmergencyChoice('ignore')
 
   console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, isAuthenticated, isMockMode, gameDataLoaded: !!gameData })
 
@@ -30,6 +219,10 @@ export default function DashboardPage() {
     )
   }
 
+  // 安全なゲームデータ取得
+  const safeGameData = getSafeGameData(isMockMode, gameData, user)
+  const gameStats = calculateGameStats(safeGameData)
+
   // ユーザーが存在しない場合（開発環境では表示を続行）
   const isDevelopment = process.env.NODE_ENV === 'development'
   if (!user && !isDevelopment) {
@@ -46,7 +239,7 @@ export default function DashboardPage() {
     )
   }
 
-  console.log('📊 DashboardPage: メインコンテンツを表示', { user, isMockMode })
+  console.log('📊 DashboardPage: メインコンテンツを表示', { user, isMockMode, hasGameData: !!safeGameData })
 
   // 開発環境でユーザーがいない場合の初期化案内
   if (isDevelopment && !user && !isMockMode) {
@@ -73,7 +266,7 @@ export default function DashboardPage() {
           トキワシティ訓練所
         </h1>
         <p className="font-pixel text-xs text-retro-gb-mid">
-          館長: {user?.email || (isMockMode ? '開発テスト館長' : 'ゲスト')}
+          館長: {safeGameData.profile?.guest_name || user?.email || (isMockMode ? '開発テスト館長' : 'ゲスト')}
           {isMockMode && (
             <span className="ml-2 px-2 py-1 bg-yellow-300 text-yellow-800 rounded text-xs">
               🎮 DEV
@@ -89,7 +282,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {formatMoney(isMockMode ? MOCK_PROFILE.current_money : 50000)}
+                {formatMoney(gameStats.currentMoney)}
               </div>
             </div>
             <div className="space-y-2">
@@ -116,14 +309,14 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {isMockMode ? MOCK_PROFILE.total_reputation : 0}
+                {gameStats.reputation}
               </div>
               <div className="font-pixel text-xs text-retro-gb-mid">
                 評判ポイント
               </div>
             </div>
             <PixelProgressBar 
-              value={isMockMode ? MOCK_PROFILE.total_reputation : 0} 
+              value={gameStats.reputation} 
               max={1000} 
               color="hp"
               showLabel={true}
@@ -135,15 +328,15 @@ export default function DashboardPage() {
         <PixelCard title="現在の活動">
           <div className="space-y-3">
             <div className="font-pixel text-xs text-retro-gb-dark">
-              進行中の派遣: {isMockMode ? gameData.expeditions.length : 2}件
+              進行中の派遣: {gameStats.activeExpeditions}件
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              利用可能トレーナー: {isMockMode ? gameData.trainers.length : 3}人
+              利用可能トレーナー: {gameStats.totalTrainers}人
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              総ポケモン数: {isMockMode ? gameData.pokemon.length : 8}匹
+              総ポケモン数: {gameStats.totalPokemon}匹
             </div>
-            <PixelButton size="sm" className="w-full">
+            <PixelButton size="sm" className="w-full" onClick={handleViewDetails}>
               詳細を見る
             </PixelButton>
           </div>
@@ -153,16 +346,16 @@ export default function DashboardPage() {
       {/* クイックアクション */}
       <PixelCard title="クイックアクション">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <PixelButton size="sm">
+          <PixelButton size="sm" onClick={handleNewExpedition}>
             新しい派遣
           </PixelButton>
-          <PixelButton size="sm" variant="secondary">
+          <PixelButton size="sm" variant="secondary" onClick={handleHireTrainer}>
             トレーナー雇用
           </PixelButton>
-          <PixelButton size="sm" variant="secondary">
+          <PixelButton size="sm" variant="secondary" onClick={handleUpgradeFacility}>
             施設強化
           </PixelButton>
-          <PixelButton size="sm" variant="secondary">
+          <PixelButton size="sm" variant="secondary" onClick={handleManagePokemon}>
             ポケモン管理
           </PixelButton>
         </div>
@@ -193,25 +386,33 @@ export default function DashboardPage() {
         </div>
       </PixelCard>
 
-      {/* 緊急通知（サンプル） */}
-      <PixelCard title="緊急通知" variant="danger">
-        <div className="space-y-2">
-          <div className="font-pixel text-xs text-red-800">
-            ⚠️ カスミが野生のピカチュウを発見！
+      {/* 緊急通知 */}
+      {showEmergency && emergencyEvent && (
+        <PixelCard title="緊急通知" variant="danger">
+          <div className="space-y-2">
+            <div className="font-pixel text-xs text-red-800">
+              ⚠️ {emergencyEvent.trainerName}が野生の{emergencyEvent.pokemon}を発見！
+            </div>
+            <div className="font-pixel text-xs text-red-700">
+              捕獲を試みますか？（残り時間: {emergencyEvent.timeLeft}秒）
+            </div>
+            <div className="font-pixel text-xs text-orange-600">
+              成功確率: {emergencyEvent.successChance}%
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <PixelButton size="sm" variant="danger" onClick={handleCapturePokemon}>
+                捕獲する
+              </PixelButton>
+              <PixelButton size="sm" variant="secondary" onClick={() => handleEmergencyChoice('observe')}>
+                観察する
+              </PixelButton>
+              <PixelButton size="sm" variant="secondary" onClick={handleMissPokemon}>
+                見逃す
+              </PixelButton>
+            </div>
           </div>
-          <div className="font-pixel text-xs text-red-700">
-            捕獲を試みますか？（残り時間: 25秒）
-          </div>
-          <div className="flex gap-2">
-            <PixelButton size="sm" variant="danger">
-              捕獲する
-            </PixelButton>
-            <PixelButton size="sm" variant="secondary">
-              見逃す
-            </PixelButton>
-          </div>
-        </div>
-      </PixelCard>
+        </PixelCard>
+      )}
     </div>
   )
 }

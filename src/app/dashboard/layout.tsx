@@ -12,8 +12,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, user, isMockMode } = useAuth()
-  const isLoading = false // 一時的にfalse固定
+  const { isAuthenticated, user, isMockMode, isLoading } = useAuth()
   const router = useRouter()
 
   console.log('🏗️ DashboardLayout: レンダリング', { isAuthenticated, isLoading })

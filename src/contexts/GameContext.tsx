@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useReducer, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useGameState } from '@/lib/realtime-hooks'
 import { supabase } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
