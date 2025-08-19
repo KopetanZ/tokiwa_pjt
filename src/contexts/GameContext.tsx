@@ -20,6 +20,7 @@ export interface GameContextState {
   
   // ゲームデータ
   gameData: {
+    profile: any
     pokemon: any[]
     trainers: any[]
     expeditions: any[]
@@ -85,6 +86,7 @@ const initialState: GameContextState = {
   isLoading: true,
   errors: [],
   gameData: {
+    profile: null,
     pokemon: [],
     trainers: [],
     expeditions: [],
@@ -117,7 +119,8 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
       return {
         ...state,
         user: action.payload,
-        isAuthenticated: !!action.payload
+        isAuthenticated: !!action.payload,
+        isLoading: false // ユーザー状態が設定されたらローディングを終了
       }
     
     case 'SET_LOADING':
@@ -250,6 +253,7 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
         isLoading: true,
         errors: [],
         gameData: {
+          profile: null,
           pokemon: [],
           trainers: [],
           expeditions: [],
@@ -314,10 +318,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (supabase) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         dispatch({ type: 'SET_USER', payload: session?.user ?? null })
+        // セッションが存在する場合は認証済みとして設定
+        if (session?.user) {
+          dispatch({ type: 'SET_LOADING', payload: false })
+        }
       })
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         dispatch({ type: 'SET_USER', payload: session?.user ?? null })
+        // 認証状態が変更されたらローディング状態を更新
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          dispatch({ type: 'SET_LOADING', payload: false })
+        }
       })
 
       return () => subscription.unsubscribe()
@@ -328,6 +340,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (state.user && !state.isMockMode) {
       const newGameData = {
+        profile: gameStateHook.profile?.profile || null,
         pokemon: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon : [],
         trainers: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers : [],
         expeditions: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions : [],
@@ -339,6 +352,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       
       // データが実際に変更された場合のみ更新（深い比較を避ける）
       const hasDataChanged = 
+        (newGameData.profile?.id !== state.gameData.profile?.id) ||
         newGameData.pokemon.length !== state.gameData.pokemon.length ||
         newGameData.trainers.length !== state.gameData.trainers.length ||
         newGameData.expeditions.length !== state.gameData.expeditions.length ||
@@ -357,6 +371,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [
     state.user?.id,
     state.isMockMode,
+    gameStateHook.profile?.profile?.id,
     Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon.length : 0,
     Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers.length : 0,
     Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions.length : 0,
@@ -424,12 +439,32 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     },
 
     signOut: async () => {
-      if (supabase) {
-        await supabase.auth.signOut()
-      }
-      // モックモードの場合は無効化
-      if (state.isMockMode) {
-        dispatch({ type: 'DISABLE_MOCK_MODE' })
+      try {
+        if (supabase) {
+          await supabase.auth.signOut()
+        }
+        // モックモードの場合は無効化
+        if (state.isMockMode) {
+          dispatch({ type: 'DISABLE_MOCK_MODE' })
+        }
+        // ユーザー状態をリセット
+        dispatch({ type: 'SET_USER', payload: null })
+        dispatch({ type: 'SET_LOADING', payload: false })
+        // ゲームデータをリセット
+        dispatch({ type: 'UPDATE_GAME_DATA', payload: {
+          profile: null,
+          pokemon: [],
+          trainers: [],
+          expeditions: [],
+          facilities: [],
+          transactions: [],
+          progress: null,
+          analysis: []
+        }})
+        console.log('✅ ログアウト完了: ユーザー状態をリセットしました')
+      } catch (error) {
+        console.error('❌ ログアウトエラー:', error)
+        throw error
       }
     },
 

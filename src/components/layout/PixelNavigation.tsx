@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { clsx } from 'clsx'
+import { useAuth } from '@/contexts/GameContext'
 
 interface NavItem {
   href: string
@@ -25,6 +26,17 @@ const navItems: NavItem[] = [
 
 export function PixelNavigation() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { signOut } = useAuth()
+
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      router.push('/')
+    } catch (error) {
+      console.error('ログアウトエラー:', error)
+    }
+  }
 
   return (
     <nav className="w-48 bg-retro-gb-light border-r-2 border-retro-gb-dark p-4">
@@ -66,7 +78,10 @@ export function PixelNavigation() {
           <div className="font-pixel text-xs text-retro-gb-mid">
             Ver 1.0.0
           </div>
-          <button className="font-pixel text-xs text-retro-gb-mid hover:text-retro-gb-dark">
+          <button 
+            onClick={handleLogout}
+            className="font-pixel text-xs text-retro-gb-mid hover:text-retro-gb-dark cursor-pointer"
+          >
             ログアウト
           </button>
         </div>

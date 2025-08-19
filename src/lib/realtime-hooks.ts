@@ -20,6 +20,13 @@ async function safeSupabaseQuery<T>(
   const { data, error } = await queryFn(client)
   
   if (error) {
+    console.error('🔧 Supabaseクエリエラー:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    })
+    
     // 400エラー（テーブル未作成など）の場合は分かりやすいエラーメッセージ
     if (error.message?.includes('400') || error.code === 'PGRST116') {
       console.warn('🔧 データベーステーブルが見つかりません。モックモードの使用を推奨します。')
@@ -198,6 +205,33 @@ export function usePokemon(userId: string) {
   }
 }
 
+// ユーザープロファイルデータフック（安全版）
+export function useProfile(userId: string) {
+  const { isConnected } = useRealtimeData('profiles', ['profile', userId], userId)
+  
+  const query = useSupabaseQuery(
+    ['profile', userId],
+    async () => {
+      return safeSupabaseQuery(async (client) => {
+        return client
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+      })
+    },
+    { enabled: !!userId }
+  )
+
+  return {
+    profile: query.data || null,
+    loading: query.isLoading,
+    error: query.error,
+    isConnected,
+    refetch: query.refetch
+  }
+}
+
 // トレーナーデータフック（安全版）
 export function useTrainers(userId: string) {
   const { isConnected } = useRealtimeData('trainers', ['trainers', userId], userId)
@@ -268,7 +302,7 @@ export function useFacilities(userId: string) {
           .from('facilities')
           .select('*')
           .eq('user_id', userId)
-          .order('facility_id')
+          .order('id')
       })
     },
     { 
@@ -387,6 +421,7 @@ export function useAIAnalysis(userId: string) {
 
 // 統合状態管理フック（安全版）
 export function useGameState(userId: string) {
+  const profile = useProfile(userId)
   const pokemon = usePokemon(userId)
   const trainers = useTrainers(userId)
   const expeditions = useExpeditions(userId)
@@ -397,6 +432,7 @@ export function useGameState(userId: string) {
 
   // 全体的な接続状態
   const isConnected = [
+    profile.isConnected,
     pokemon.isConnected,
     trainers.isConnected,
     expeditions.isConnected,
@@ -408,6 +444,7 @@ export function useGameState(userId: string) {
 
   // 全体的な読み込み状態
   const isLoading = [
+    profile.loading,
     pokemon.loading,
     trainers.loading,
     expeditions.loading,
@@ -419,6 +456,7 @@ export function useGameState(userId: string) {
 
   // 全体的なエラー状態
   const errors = [
+    profile.error,
     pokemon.error,
     trainers.error,
     expeditions.error,
@@ -429,6 +467,7 @@ export function useGameState(userId: string) {
   ].filter(error => error !== null)
 
   return {
+    profile,
     pokemon,
     trainers,
     expeditions,

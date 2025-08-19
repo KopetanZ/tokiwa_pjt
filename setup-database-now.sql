@@ -15,7 +15,130 @@ CREATE TABLE IF NOT EXISTS profiles (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. ポケモンテーブル
+-- 2. トレーナー職業定義テーブル
+CREATE TABLE IF NOT EXISTS trainer_jobs (
+    id SERIAL PRIMARY KEY,
+    job_name VARCHAR(50) NOT NULL,
+    job_name_ja VARCHAR(50) NOT NULL,
+    description TEXT,
+    max_level INTEGER DEFAULT 10,
+    specializations JSONB NOT NULL,
+    unlock_cost INTEGER DEFAULT 0,
+    sprite_path VARCHAR(200),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(job_name)
+);
+
+-- 3. トレーナーテーブル
+CREATE TABLE IF NOT EXISTS trainers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    name VARCHAR(50) NOT NULL,
+    job_id INTEGER REFERENCES trainer_jobs(id),
+    job_level INTEGER DEFAULT 1,
+    job_experience INTEGER DEFAULT 0,
+    
+    -- 嗜好システム
+    preferences JSONB NOT NULL DEFAULT '{}',
+    compliance_rate INTEGER DEFAULT 50,
+    trust_level INTEGER DEFAULT 0,
+    personality VARCHAR(50) DEFAULT 'balanced',
+    
+    -- 派遣状態
+    status VARCHAR(20) DEFAULT 'available',
+    current_expedition_id UUID,
+    
+    -- 経済
+    salary INTEGER NOT NULL DEFAULT 3000,
+    total_earned INTEGER DEFAULT 0,
+    
+    sprite_path VARCHAR(200),
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. 派遣先定義テーブル
+CREATE TABLE IF NOT EXISTS expedition_locations (
+    id SERIAL PRIMARY KEY,
+    location_name VARCHAR(100) NOT NULL,
+    location_name_ja VARCHAR(100) NOT NULL,
+    region VARCHAR(50) DEFAULT 'kanto',
+    
+    distance_level INTEGER NOT NULL,
+    travel_cost INTEGER NOT NULL,
+    travel_time_hours INTEGER NOT NULL,
+    risk_level DECIMAL(3,2) DEFAULT 1.0,
+    
+    base_reward_money INTEGER DEFAULT 1000,
+    reward_multiplier DECIMAL(3,2) DEFAULT 1.0,
+    
+    encounter_species INTEGER[] DEFAULT '{}',
+    encounter_rates JSONB DEFAULT '{}',
+    
+    background_image VARCHAR(200),
+    map_icon VARCHAR(200),
+    
+    unlock_requirements JSONB DEFAULT '{}',
+    is_unlocked_by_default BOOLEAN DEFAULT false,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(location_name)
+);
+
+-- 5. 派遣履歴・進行中テーブル
+CREATE TABLE IF NOT EXISTS expeditions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    trainer_id UUID REFERENCES trainers(id) ON DELETE CASCADE,
+    location_id INTEGER REFERENCES expedition_locations(id),
+    
+    expedition_mode VARCHAR(20) DEFAULT 'balanced',
+    target_duration_hours INTEGER NOT NULL,
+    advice_given JSONB DEFAULT '{}',
+    
+    status VARCHAR(20) DEFAULT 'preparing',
+    started_at TIMESTAMPTZ,
+    expected_return TIMESTAMPTZ,
+    actual_return TIMESTAMPTZ,
+    current_progress DECIMAL(3,2) DEFAULT 0.0,
+    
+    intervention_opportunities JSONB DEFAULT '[]',
+    intervention_responses JSONB DEFAULT '{}',
+    
+    result_summary JSONB DEFAULT '{}',
+    success_rate DECIMAL(3,2),
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 6. 施設管理テーブル
+CREATE TABLE IF NOT EXISTS facilities (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    facility_type VARCHAR(50) NOT NULL,
+    
+    level INTEGER DEFAULT 1,
+    max_level INTEGER DEFAULT 5,
+    upgrade_cost INTEGER NOT NULL,
+    
+    effects JSONB NOT NULL DEFAULT '{}',
+    
+    maintenance_cost INTEGER DEFAULT 0,
+    construction_cost INTEGER NOT NULL,
+    
+    sprite_path VARCHAR(200),
+    
+    status VARCHAR(20) DEFAULT 'active',
+    construction_started TIMESTAMPTZ,
+    construction_completed TIMESTAMPTZ,
+    
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 7. ポケモンテーブル
 CREATE TABLE IF NOT EXISTS pokemon (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -39,7 +162,7 @@ CREATE TABLE IF NOT EXISTS pokemon (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. 取引テーブル
+-- 8. 取引テーブル
 CREATE TABLE IF NOT EXISTS transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -51,7 +174,7 @@ CREATE TABLE IF NOT EXISTS transactions (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. ゲーム進行状況テーブル  
+-- 9. ゲーム進行状況テーブル  
 CREATE TABLE IF NOT EXISTS game_progress (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
@@ -66,7 +189,7 @@ CREATE TABLE IF NOT EXISTS game_progress (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 5. ゲームバランステーブル
+-- 10. ゲームバランステーブル
 CREATE TABLE IF NOT EXISTS game_balance (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
@@ -79,7 +202,7 @@ CREATE TABLE IF NOT EXISTS game_balance (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 6. 研究プロジェクトテーブル
+-- 11. 研究プロジェクトテーブル
 CREATE TABLE IF NOT EXISTS research_projects (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -93,7 +216,7 @@ CREATE TABLE IF NOT EXISTS research_projects (
     UNIQUE(user_id, project_id)
 );
 
--- 7. AI分析テーブル
+-- 12. AI分析テーブル
 CREATE TABLE IF NOT EXISTS ai_analysis (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -107,7 +230,7 @@ CREATE TABLE IF NOT EXISTS ai_analysis (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. 介入ログテーブル
+-- 13. 介入ログテーブル
 CREATE TABLE IF NOT EXISTS interventions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
@@ -119,13 +242,34 @@ CREATE TABLE IF NOT EXISTS interventions (
     resolved_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 9. バックアップテーブル
+-- 14. バックアップテーブル
 CREATE TABLE IF NOT EXISTS backups (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     backup_data JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 初期データの挿入（重複回避）
+INSERT INTO trainer_jobs (job_name, job_name_ja, specializations, sprite_path) 
+SELECT * FROM (VALUES
+    ('ranger', 'レンジャー', '{"capture": 1.25, "exploration": 1.15, "battle": 0.95}'::jsonb, '/sprites/jobs/ranger.png'),
+    ('breeder', 'ブリーダー', '{"breeding": 1.30, "healing": 1.20, "capture": 1.05}'::jsonb, '/sprites/jobs/breeder.png'),
+    ('battler', 'バトラー', '{"battle": 1.25, "strategy": 1.15, "capture": 0.90}'::jsonb, '/sprites/jobs/battler.png'),
+    ('researcher', 'リサーチャー', '{"discovery": 1.25, "rare_find": 1.30, "analysis": 1.20}'::jsonb, '/sprites/jobs/researcher.png'),
+    ('medic', 'メディック', '{"healing": 1.35, "safety": 1.25, "emergency": 1.40}'::jsonb, '/sprites/jobs/medic.png')
+) AS v(job_name, job_name_ja, specializations, sprite_path)
+WHERE NOT EXISTS (SELECT 1 FROM trainer_jobs WHERE job_name = v.job_name);
+
+INSERT INTO expedition_locations (location_name, location_name_ja, distance_level, travel_cost, travel_time_hours, is_unlocked_by_default)
+SELECT * FROM (VALUES
+    ('viridian_forest', 'トキワの森', 1, 500, 2, true),
+    ('route_22', '22番道路', 1, 300, 1, true),
+    ('pewter_gym', 'ニビジム', 2, 1200, 4, false),
+    ('mt_moon', 'お月見山', 3, 2000, 8, false),
+    ('cerulean_cave', 'ハナダの洞窟', 5, 5000, 24, false)
+) AS v(location_name, location_name_ja, distance_level, travel_cost, travel_time_hours, is_unlocked_by_default)
+WHERE NOT EXISTS (SELECT 1 FROM expedition_locations WHERE location_name = v.location_name);
 
 -- Row Level Security (RLS) ポリシー設定
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
