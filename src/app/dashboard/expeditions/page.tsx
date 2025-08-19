@@ -5,6 +5,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { ExpeditionCard } from '@/components/expeditions/ExpeditionCard'
 import { LocationCard } from '@/components/expeditions/LocationCard'
+import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState } from 'react'
 
 // サンプルデータ
@@ -89,6 +90,42 @@ const sampleLocations = [
 
 export default function ExpeditionsPage() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'locations' | 'history'>('active')
+  
+  const { isMockMode } = useAuth()
+  const gameData = useGameData()
+  const { addNotification } = useNotifications()
+  
+  // 実際のゲームデータまたはサンプルデータを使用
+  const expeditions = isMockMode ? gameData.expeditions : sampleActiveExpeditions
+  
+  // 統計計算
+  const stats = {
+    active: expeditions.length,
+    interventionRequired: expeditions.filter(exp => exp.hasInterventionRequired || 
+      (exp.status === 'active' && Math.random() > 0.7)).length,
+    todayEarnings: expeditions.reduce((sum, exp) => sum + (exp.estimatedReward || 0), 0),
+    availableLocations: 2 // 解放済みエリア数
+  }
+  
+  const handleStartExpedition = (locationId: number) => {
+    addNotification({
+      type: 'success',
+      message: `新しい派遣を開始しました！`
+    })
+    
+    // TODO: 実際の派遣開始処理を実装
+    console.log('派遣開始:', { locationId })
+  }
+  
+  const handleIntervention = (expeditionId: string) => {
+    addNotification({
+      type: 'info',
+      message: `派遣#${expeditionId}に介入しました`
+    })
+    
+    // TODO: 実際の介入処理を実装
+    console.log('介入処理:', { expeditionId })
+  }
 
   return (
     <div className="space-y-6">
@@ -106,28 +143,28 @@ export default function ExpeditionsPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <PixelCard title="進行中の派遣">
           <div className="text-center">
-            <div className="font-pixel-large text-orange-600">2</div>
+            <div className="font-pixel-large text-orange-600">{stats.active}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">活動中</div>
           </div>
         </PixelCard>
 
         <PixelCard title="緊急介入">
           <div className="text-center">
-            <div className="font-pixel-large text-red-600">1</div>
+            <div className="font-pixel-large text-red-600">{stats.interventionRequired}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">要対応</div>
           </div>
         </PixelCard>
 
         <PixelCard title="今日の成果">
           <div className="text-center">
-            <div className="font-pixel-large text-green-600">₽3,200</div>
+            <div className="font-pixel-large text-green-600">₽{stats.todayEarnings.toLocaleString()}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">獲得金額</div>
           </div>
         </PixelCard>
 
         <PixelCard title="利用可能エリア">
           <div className="text-center">
-            <div className="font-pixel-large text-retro-gb-dark">2/5</div>
+            <div className="font-pixel-large text-retro-gb-dark">{stats.availableLocations}/5</div>
             <div className="font-pixel text-xs text-retro-gb-mid">解放済み</div>
           </div>
         </PixelCard>
@@ -156,13 +193,19 @@ export default function ExpeditionsPage() {
       {/* 進行中の派遣 */}
       {selectedTab === 'active' && (
         <div className="space-y-4">
-          {sampleActiveExpeditions.length > 0 ? (
-            sampleActiveExpeditions.map(expedition => (
+          {expeditions.length > 0 ? (
+            expeditions.map(expedition => (
               <ExpeditionCard 
                 key={expedition.id}
                 expedition={expedition}
-                onIntervene={(id) => {/* 介入処理 */}}
-                onRecall={(id) => {/* 呼び戻し処理 */}}
+                onIntervene={handleIntervention}
+                onRecall={(id) => {
+                  addNotification({
+                    type: 'info',
+                    message: `派遣#${id}を呼び戻しました`
+                  })
+                  console.log('呼び戻し処理:', { id })
+                }}
               />
             ))
           ) : (
@@ -187,7 +230,7 @@ export default function ExpeditionsPage() {
             <LocationCard
               key={location.id}
               location={location}
-              onStartExpedition={(locationId) => {/* 派遣開始処理 */}}
+              onStartExpedition={handleStartExpedition}
             />
           ))}
         </div>

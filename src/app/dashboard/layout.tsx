@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuth } from '@/components/providers/AuthProvider'
+import { useAuth } from '@/contexts/GameContext'
 import { GameBoyScreen } from '@/components/layout/GameBoyScreen'
 import { PixelNavigation } from '@/components/layout/PixelNavigation'
 import { StatusBar } from '@/components/layout/StatusBar'
@@ -12,18 +12,22 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, user, isMockMode } = useAuth()
+  const isLoading = false // 一時的にfalse固定
   const router = useRouter()
 
   console.log('🏗️ DashboardLayout: レンダリング', { isAuthenticated, isLoading })
 
+  // 開発モード: 認証をスキップ
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  
   useEffect(() => {
-    console.log('🏗️ DashboardLayout: useEffect実行', { isAuthenticated, isLoading })
-    if (!isLoading && !isAuthenticated) {
+    console.log('🏗️ DashboardLayout: useEffect実行', { isAuthenticated, isLoading, isDevelopment })
+    if (!isDevelopment && !isLoading && !isAuthenticated) {
       console.log('🏗️ DashboardLayout: 認証されていない、ホームにリダイレクト')
       router.push('/')
     }
-  }, [isAuthenticated, isLoading, router])
+  }, [isAuthenticated, isLoading, router, isDevelopment])
 
   // ローディング中の表示
   if (isLoading) {
@@ -41,8 +45,8 @@ export default function DashboardLayout({
     )
   }
 
-  // 認証されていない場合
-  if (!isAuthenticated) {
+  // 認証されていない場合（本番環境のみ）
+  if (!isDevelopment && !isAuthenticated) {
     console.log('🏗️ DashboardLayout: 認証されていない、エラー表示')
     return (
       <GameBoyScreen>

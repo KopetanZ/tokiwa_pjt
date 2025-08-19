@@ -5,6 +5,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { TrainerCard } from '@/components/trainers/TrainerCard'
 import { TrainerSummary } from '@/types/trainer'
+import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState } from 'react'
 
 // サンプルデータ
@@ -79,12 +80,62 @@ const sampleTrainers: TrainerSummary[] = [
 
 export default function TrainersPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
-
-  const filteredTrainers = sampleTrainers.filter(trainer => {
+  const [showHiringModal, setShowHiringModal] = useState(false)
+  
+  const { isMockMode } = useAuth()
+  const gameData = useGameData()
+  const { addNotification } = useNotifications()
+  
+  // 実際のゲームデータまたはサンプルデータを使用
+  // モックデータを表示用の構造に変換
+  const trainers = isMockMode ? 
+    gameData.trainers.map(trainer => ({
+      id: trainer.id,
+      name: trainer.name,
+      job: {
+        id: 1,
+        name: 'ranger',
+        nameJa: trainer.specialty || 'レンジャー',
+        level: trainer.level,
+        experience: trainer.experience,
+        nextLevelExp: trainer.next_level_exp,
+        specializations: { capture: 1.2, exploration: 1.1, battle: 1.0 }
+      },
+      status: trainer.status as 'available' | 'on_expedition' | 'training',
+      party: {
+        pokemonCount: 2,
+        totalLevel: trainer.level * 2,
+        averageLevel: trainer.level
+      },
+      trustLevel: Math.min(100, trainer.experience / 10),
+      salary: 3000 + trainer.level * 200,
+      spritePath: '/sprites/trainers/ranger_m.png'
+    })) : sampleTrainers
+  
+  const filteredTrainers = trainers.filter(trainer => {
     if (selectedTab === 'available') return trainer.status === 'available'
     if (selectedTab === 'busy') return trainer.status !== 'available'
     return true
   })
+  
+  // 統計計算
+  const stats = {
+    total: trainers.length,
+    available: trainers.filter(t => t.status === 'available').length,
+    busy: trainers.filter(t => t.status !== 'available').length,
+    totalSalary: trainers.reduce((sum, t) => sum + (t.salary || 0), 0)
+  }
+  
+  const handleHireTrainer = (trainerName: string, cost: number) => {
+    // 雇用処理
+    addNotification({
+      type: 'success',
+      message: `${trainerName}を雇用しました！（費用: ₽${cost.toLocaleString()}）`
+    })
+    
+    // TODO: 実際の雇用ロジックを実装
+    console.log('雇用処理:', { trainerName, cost })
+  }
 
   return (
     <div className="space-y-6">
@@ -102,28 +153,28 @@ export default function TrainersPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <PixelCard title="総トレーナー数">
           <div className="text-center">
-            <div className="font-pixel-large text-retro-gb-dark">3</div>
+            <div className="font-pixel-large text-retro-gb-dark">{stats.total}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">/ 10 (最大)</div>
           </div>
         </PixelCard>
 
         <PixelCard title="利用可能">
           <div className="text-center">
-            <div className="font-pixel-large text-green-600">1</div>
+            <div className="font-pixel-large text-green-600">{stats.available}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">派遣可能</div>
           </div>
         </PixelCard>
 
-        <PixelCard title="派遣中">
+        <PixelCard title="活動中">
           <div className="text-center">
-            <div className="font-pixel-large text-orange-600">1</div>
-            <div className="font-pixel text-xs text-retro-gb-mid">活動中</div>
+            <div className="font-pixel-large text-orange-600">{stats.busy}</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">派遣・訓練中</div>
           </div>
         </PixelCard>
 
         <PixelCard title="月給総額">
           <div className="text-center">
-            <div className="font-pixel-large text-retro-gb-dark">₽9,400</div>
+            <div className="font-pixel-large text-retro-gb-dark">₽{stats.totalSalary.toLocaleString()}</div>
             <div className="font-pixel text-xs text-retro-gb-mid">維持費</div>
           </div>
         </PixelCard>
@@ -185,7 +236,11 @@ export default function TrainersPage() {
                 <div className="font-pixel text-xs text-retro-gb-dark">
                   雇用費: ₽{candidate.cost.toLocaleString()}
                 </div>
-                <PixelButton size="sm" className="w-full">
+                <PixelButton 
+                  size="sm" 
+                  className="w-full"
+                  onClick={() => handleHireTrainer(candidate.name, candidate.cost)}
+                >
                   雇用する
                 </PixelButton>
               </div>

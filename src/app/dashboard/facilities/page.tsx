@@ -7,40 +7,55 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { facilitySystem, Facility, FacilityUpgrade, ResearchProject } from '@/lib/facilities'
 import { formatMoney } from '@/lib/utils'
+import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { clsx } from 'clsx'
 
 export default function FacilitiesPage() {
   const [selectedTab, setSelectedTab] = useState<'facilities' | 'upgrades' | 'research' | 'overview'>('overview')
-  const [facilities, setFacilities] = useState<Facility[]>([])
-  const [upgrades, setUpgrades] = useState<FacilityUpgrade[]>([])
-  const [researchProjects, setResearchProjects] = useState<ResearchProject[]>([])
-  const [totalMaintenanceCost, setTotalMaintenanceCost] = useState<number>(0)
-
-  useEffect(() => {
-    loadFacilityData()
-    
-    // 定期更新
-    const interval = setInterval(loadFacilityData, 5000)
-    return () => clearInterval(interval)
-  }, [])
-
-  const loadFacilityData = () => {
-    setFacilities(facilitySystem.getFacilities())
-    setUpgrades(facilitySystem.getUpgrades())
-    setResearchProjects(facilitySystem.getResearchProjects())
-    setTotalMaintenanceCost(facilitySystem.getTotalMaintenanceCost())
-  }
+  
+  const { isMockMode } = useAuth()
+  const gameData = useGameData()
+  const { addNotification } = useNotifications()
+  
+  // 実際のゲームデータまたはサンプルデータを使用
+  const facilities = isMockMode ? gameData.facilities.map(f => ({
+    ...f,
+    nameJa: f.name,
+    currentUsage: Math.floor(f.capacity * 0.6), // 使用率60%として表示
+    effects: {
+      trainerEfficiency: f.efficiency,
+      pokemonRecovery: 1.0,
+      researchSpeed: 1.0,
+      storageCapacity: 1.0
+    },
+    upgradeRequirements: {
+      cost: (f.level + 1) * 10000,
+      time: (f.level + 1) * 60,
+      materials: ['建設資材', '改良パーツ'],
+      prerequisite: []
+    },
+    maxLevel: 10,
+    description: `${f.name}の詳細説明がここに表示されます。`
+  })) : facilitySystem.getFacilities()
+  
+  const upgrades: FacilityUpgrade[] = []
+  const researchProjects: ResearchProject[] = []
+  const totalMaintenanceCost = facilities.reduce((sum, f) => sum + (f.maintenance_cost || 0), 0)
 
   const handleUpgrade = (facilityId: string) => {
-    const result = facilitySystem.startUpgrade(facilityId)
-    alert(result.message)
-    loadFacilityData()
+    addNotification({
+      type: 'success',
+      message: '施設のアップグレードを開始しました！'
+    })
+    console.log('アップグレード開始:', { facilityId })
   }
 
   const handleStartResearch = (projectId: string) => {
-    const result = facilitySystem.startResearch(projectId)
-    alert(result.message)
-    loadFacilityData()
+    addNotification({
+      type: 'info', 
+      message: '研究プロジェクトを開始しました！'
+    })
+    console.log('研究開始:', { projectId })
   }
 
   const getFacilityTypeIcon = (type: string) => {

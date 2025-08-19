@@ -1,5 +1,6 @@
 // 施設管理システム
 import { economySystem } from './economy'
+import { supabase } from './supabase'
 
 // 施設タイプ定義
 export interface Facility {
@@ -75,10 +76,121 @@ class FacilityManagementSystem {
   private upgrades: Map<string, FacilityUpgrade> = new Map()
   private researchProjects: Map<string, ResearchProject> = new Map()
   private totalResearchPoints: number = 0
+  private userId: string | null = null
   
   constructor() {
     this.initializeBaseFacilities()
     this.initializeResearchProjects()
+    this.loadUserData()
+  }
+  
+  // ユーザーデータ読み込み
+  private async loadUserData(): Promise<void> {
+    try {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          this.userId = user.id
+          await this.syncWithDatabase()
+        }
+      }
+    } catch (error) {
+      console.error('ユーザーデータ読み込みエラー:', error)
+    }
+  }
+  
+  // データベース同期
+  private async syncWithDatabase(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      // 施設データ読み込み
+      const { data: facilitiesData } = await supabase
+        .from('facilities')
+        .select('*')
+        .eq('user_id', this.userId)
+      
+      if (facilitiesData) {
+        facilitiesData.forEach((facilityData: any) => {
+          const facility = this.facilities.get(facilityData.facility_id)
+          if (facility) {
+            facility.level = facilityData.level
+            facility.status = facilityData.status
+            facility.currentUsage = facilityData.current_usage
+            this.updateFacilityEffects(facility)
+          }
+        })
+      }
+      
+      // 研究プロジェクトデータ読み込み
+      const { data: researchData } = await supabase
+        .from('research_projects')
+        .select('*')
+        .eq('user_id', this.userId)
+      
+      if (researchData) {
+        researchData.forEach((projectData: any) => {
+          const project = this.researchProjects.get(projectData.project_id)
+          if (project) {
+            project.researchPoints = projectData.research_points
+            project.status = projectData.status
+          }
+        })
+      }
+      
+    } catch (error) {
+      console.error('データベース同期エラー:', error)
+    }
+  }
+  
+  // 施設データ保存
+  private async saveFacilityData(facilityId: string): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    const facility = this.facilities.get(facilityId)
+    if (!facility) return
+    
+    try {
+      const { error } = await supabase
+        .from('facilities')
+        .upsert({
+          user_id: this.userId,
+          facility_id: facilityId,
+          level: facility.level,
+          status: facility.status,
+          current_usage: facility.currentUsage,
+          efficiency: facility.efficiency,
+          updated_at: new Date().toISOString()
+        })
+      
+      if (error) throw error
+    } catch (error) {
+      console.error('施設データ保存エラー:', error)
+    }
+  }
+  
+  // 研究プロジェクトデータ保存
+  private async saveResearchData(projectId: string): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    const project = this.researchProjects.get(projectId)
+    if (!project) return
+    
+    try {
+      const { error } = await supabase
+        .from('research_projects')
+        .upsert({
+          user_id: this.userId,
+          project_id: projectId,
+          research_points: project.researchPoints,
+          status: project.status,
+          updated_at: new Date().toISOString()
+        })
+      
+      if (error) throw error
+    } catch (error) {
+      console.error('研究データ保存エラー:', error)
+    }
   }
   
   // 基本施設初期化
@@ -412,7 +524,7 @@ class FacilityManagementSystem {
   }
   
   // アップグレード完了
-  private completeUpgrade(facilityId: string): void {
+  private async completeUpgrade(facilityId: string): Promise<void> {
     const facility = this.facilities.get(facilityId)
     const upgrade = this.upgrades.get(facilityId)
     
@@ -427,6 +539,9 @@ class FacilityManagementSystem {
     
     // アップグレード記録削除
     this.upgrades.delete(facilityId)
+    
+    // データベース保存
+    await this.saveFacilityData(facilityId)
     
     // 収入記録
     economySystem.recordIncome(
@@ -534,7 +649,7 @@ class FacilityManagementSystem {
   }
   
   // 研究完了
-  private completeResearch(projectId: string): void {
+  private async completeResearch(projectId: string): Promise<void> {
     const project = this.researchProjects.get(projectId)
     if (!project) return
     
@@ -546,6 +661,9 @@ class FacilityManagementSystem {
     
     // 新しい研究プロジェクト解放
     this.unlockNewResearch()
+    
+    // データベース保存
+    await this.saveResearchData(projectId)
     
     // 成果記録
     economySystem.recordIncome(

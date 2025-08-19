@@ -3,6 +3,7 @@ import { economySystem } from './economy'
 import { facilitySystem } from './facilities'
 import { realtimeSystem } from './realtime'
 import { generateRandomWildPokemon } from './pokeapi'
+import { supabase } from './supabase'
 
 // ゲーム進行状況
 export interface GameProgress {
@@ -45,14 +46,112 @@ class GameLogicSystem {
   private gameBalance: GameBalance
   private performanceMetrics: PerformanceMetrics
   private lastCalculationTime: number = Date.now()
+  private userId: string | null = null
+  private aiAnalysisHistory: any[] = []
   
   constructor() {
     this.gameProgress = this.initializeGameProgress()
     this.gameBalance = this.initializeGameBalance()
     this.performanceMetrics = this.initializeMetrics()
     
+    this.initializeUser()
     // 定期計算開始
     this.startPeriodicCalculations()
+  }
+  
+  // ユーザー初期化
+  private async initializeUser(): Promise<void> {
+    try {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          this.userId = user.id
+          await this.loadGameState()
+        }
+      }
+    } catch (error) {
+      console.error('ユーザー初期化エラー:', error)
+    }
+  }
+  
+  // ゲーム状態読み込み
+  private async loadGameState(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      const { data: gameData } = await supabase
+        .from('game_progress')
+        .select('*')
+        .eq('user_id', this.userId)
+        .single()
+      
+      if (gameData) {
+        this.gameProgress = {
+          level: gameData.level,
+          experience: gameData.experience,
+          nextLevelExp: gameData.next_level_exp,
+          totalPlayTime: gameData.total_play_time,
+          achievementPoints: gameData.achievement_points,
+          unlockedFeatures: gameData.unlocked_features || [],
+          difficulty: gameData.difficulty || 'normal'
+        }
+      }
+      
+      const { data: balanceData } = await supabase
+        .from('game_balance')
+        .select('*')
+        .eq('user_id', this.userId)
+        .single()
+      
+      if (balanceData) {
+        this.gameBalance = {
+          trainerGrowthRate: balanceData.trainer_growth_rate,
+          pokemonGrowthRate: balanceData.pokemon_growth_rate,
+          expeditionDifficulty: balanceData.expedition_difficulty,
+          economyInflation: balanceData.economy_inflation,
+          researchSpeed: balanceData.research_speed,
+          facilityEfficiency: balanceData.facility_efficiency
+        }
+      }
+    } catch (error) {
+      console.error('ゲーム状態読み込みエラー:', error)
+    }
+  }
+  
+  // ゲーム状態保存
+  private async saveGameState(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      await supabase
+        .from('game_progress')
+        .upsert({
+          user_id: this.userId,
+          level: this.gameProgress.level,
+          experience: this.gameProgress.experience,
+          next_level_exp: this.gameProgress.nextLevelExp,
+          total_play_time: this.gameProgress.totalPlayTime,
+          achievement_points: this.gameProgress.achievementPoints,
+          unlocked_features: this.gameProgress.unlockedFeatures,
+          difficulty: this.gameProgress.difficulty,
+          updated_at: new Date().toISOString()
+        })
+      
+      await supabase
+        .from('game_balance')
+        .upsert({
+          user_id: this.userId,
+          trainer_growth_rate: this.gameBalance.trainerGrowthRate,
+          pokemon_growth_rate: this.gameBalance.pokemonGrowthRate,
+          expedition_difficulty: this.gameBalance.expeditionDifficulty,
+          economy_inflation: this.gameBalance.economyInflation,
+          research_speed: this.gameBalance.researchSpeed,
+          facility_efficiency: this.gameBalance.facilityEfficiency,
+          updated_at: new Date().toISOString()
+        })
+    } catch (error) {
+      console.error('ゲーム状態保存エラー:', error)
+    }
   }
   
   // ゲーム進行状況初期化
@@ -104,13 +203,20 @@ class GameLogicSystem {
       this.calculatePerformanceMetrics()
       this.adjustGameBalance()
       this.processIdleGains()
+      this.saveGameState()
     }, 60 * 1000)
     
     // 5分毎の詳細計算
     setInterval(() => {
       this.deepAnalysisUpdate()
       this.optimizeGameBalance()
+      this.performAIAnalysis()
     }, 5 * 60 * 1000)
+    
+    // 10分毎のデータベース分析
+    setInterval(() => {
+      this.performDatabaseAnalysis()
+    }, 10 * 60 * 1000)
   }
   
   // ゲーム進行状況更新
@@ -271,7 +377,123 @@ class GameLogicSystem {
     // AIによるレコメンデーション生成
     const recommendations = this.generateRecommendations(trends)
     
+    // 分析結果を履歴に保存
+    this.aiAnalysisHistory.push({
+      timestamp: new Date(),
+      trends,
+      recommendations,
+      gameState: this.getGameState()
+    })
+    
+    // 履歴を最新50件に制限
+    if (this.aiAnalysisHistory.length > 50) {
+      this.aiAnalysisHistory = this.aiAnalysisHistory.slice(-50)
+    }
+    
     console.log('📊 詳細分析完了', { trends, recommendations })
+  }
+  
+  // AI分析実行
+  private async performAIAnalysis(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      const gameState = this.getGameState()
+      const analysis = this.generateAdvancedAIAnalysis(gameState)
+      
+      // AI分析結果をデータベースに保存
+      await supabase
+        .from('ai_analysis')
+        .insert({
+          user_id: this.userId,
+          analysis_type: 'comprehensive',
+          game_level: gameState.progress.level,
+          efficiency_score: gameState.metrics.averageEfficiency,
+          profit_score: gameState.metrics.netProfit,
+          recommendations: analysis.recommendations,
+          predicted_outcomes: analysis.predictions,
+          optimization_suggestions: analysis.optimizations,
+          created_at: new Date().toISOString()
+        })
+      
+    } catch (error) {
+      console.error('AI分析エラー:', error)
+    }
+  }
+  
+  // 高度なAI分析生成
+  private generateAdvancedAIAnalysis(gameState: any): {
+    recommendations: string[]
+    predictions: any
+    optimizations: any
+  } {
+    const { progress, metrics, balance } = gameState
+    
+    // パフォーマンス評価
+    const profitability = metrics.totalRevenue > 0 ? metrics.netProfit / metrics.totalRevenue : 0
+    const efficiency = metrics.averageEfficiency
+    const growth = progress.level
+    
+    const recommendations: string[] = []
+    
+    // 収益性分析
+    if (profitability < 0.2) {
+      recommendations.push('支出管理の見直しが必要です。不要な経費を削減してください。')
+      recommendations.push('より効率的な収益源の開拓を検討してください。')
+    }
+    
+    // 効率性分析
+    if (efficiency < 1.5) {
+      recommendations.push('施設のアップグレードで効率を向上させることをお勧めします。')
+      recommendations.push('トレーナーのスキル向上に投資してください。')
+    }
+    
+    // 成長分析
+    if (growth >= 10 && !progress.unlockedFeatures.includes('elite_expeditions')) {
+      recommendations.push('エリート派遣の解放で更なる収益を目指してください。')
+    }
+    
+    // 予測モデル
+    const predictions = {
+      nextLevelTime: Math.max(1, Math.ceil((progress.nextLevelExp - progress.experience) / (efficiency * 100))),
+      projectedProfit: Math.floor(metrics.netProfit * (1 + efficiency * 0.1)),
+      optimalDifficulty: balance.expeditionDifficulty > 1.5 ? 'high' : 'medium',
+      recommendedInvestments: this.generateInvestmentRecommendations(metrics)
+    }
+    
+    // 最適化提案
+    const optimizations = {
+      facility: this.suggestFacilityOptimizations(efficiency),
+      expedition: this.suggestExpeditionOptimizations(metrics),
+      research: this.suggestResearchPriorities(progress),
+      budget: this.suggestBudgetOptimizations(metrics)
+    }
+    
+    return { recommendations, predictions, optimizations }
+  }
+  
+  // データベース分析実行
+  private async performDatabaseAnalysis(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      // 過去のパフォーマンスデータを取得
+      const { data: historicalData } = await supabase
+        .from('ai_analysis')
+        .select('*')
+        .eq('user_id', this.userId)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      
+      if (historicalData && historicalData.length > 5) {
+        const trends = this.analyzeHistoricalTrends(historicalData)
+        const insights = this.generateHistoricalInsights(trends)
+        
+        console.log('📈 履歴分析完了', insights)
+      }
+    } catch (error) {
+      console.error('データベース分析エラー:', error)
+    }
   }
   
   // トレンド分析
@@ -479,6 +701,132 @@ class GameLogicSystem {
     
     const nextMilestone = milestones.find(m => m.level > currentLevel)
     return nextMilestone || { level: currentLevel + 5, description: '新たな挑戦' }
+  }
+  
+  // 投資レコメンデーション生成
+  private generateInvestmentRecommendations(metrics: PerformanceMetrics): string[] {
+    const recommendations: string[] = []
+    
+    if (metrics.netProfit > 10000) {
+      recommendations.push('施設アップグレード')
+      recommendations.push('新研究プロジェクト')
+    }
+    
+    if (metrics.averageEfficiency < 1.3) {
+      recommendations.push('トレーナー追加雇用')
+      recommendations.push('効率向上設備')
+    }
+    
+    return recommendations
+  }
+  
+  // 施設最適化提案
+  private suggestFacilityOptimizations(efficiency: number): string[] {
+    const suggestions: string[] = []
+    
+    if (efficiency < 1.2) {
+      suggestions.push('訓練場のアップグレード優先')
+    }
+    if (efficiency < 1.5) {
+      suggestions.push('ポケモンセンターの拡張')
+    }
+    if (efficiency > 1.8) {
+      suggestions.push('新施設の建設検討')
+    }
+    
+    return suggestions
+  }
+  
+  // 派遣最適化提案
+  private suggestExpeditionOptimizations(metrics: PerformanceMetrics): string[] {
+    const suggestions: string[] = []
+    
+    if (metrics.expeditionSuccessRate < 70) {
+      suggestions.push('トレーナーレベル向上')
+      suggestions.push('装備品の充実')
+    }
+    if (metrics.expeditionSuccessRate > 90) {
+      suggestions.push('より困難な派遣への挑戦')
+    }
+    
+    return suggestions
+  }
+  
+  // 研究優先度提案
+  private suggestResearchPriorities(progress: GameProgress): string[] {
+    const priorities: string[] = []
+    
+    if (progress.level >= 5 && !progress.unlockedFeatures.includes('research_lab')) {
+      priorities.push('研究所の建設')
+    }
+    if (progress.level >= 8) {
+      priorities.push('効率向上研究')
+    }
+    if (progress.level >= 12) {
+      priorities.push('高度技術研究')
+    }
+    
+    return priorities
+  }
+  
+  // 予算最適化提案
+  private suggestBudgetOptimizations(metrics: PerformanceMetrics): string[] {
+    const suggestions: string[] = []
+    const profitMargin = metrics.totalRevenue > 0 ? metrics.netProfit / metrics.totalRevenue : 0
+    
+    if (profitMargin < 0.15) {
+      suggestions.push('経費削減の検討')
+      suggestions.push('収益源の多角化')
+    }
+    if (profitMargin > 0.4) {
+      suggestions.push('積極的な投資')
+      suggestions.push('拡張計画の実行')
+    }
+    
+    return suggestions
+  }
+  
+  // 履歴トレンド分析
+  private analyzeHistoricalTrends(data: any[]): any {
+    const recentData = data.slice(0, 10)
+    const olderData = data.slice(10, 20)
+    
+    const recentAvgProfit = recentData.reduce((sum, d) => sum + (d.profit_score || 0), 0) / recentData.length
+    const olderAvgProfit = olderData.reduce((sum, d) => sum + (d.profit_score || 0), 0) / Math.max(1, olderData.length)
+    
+    const recentAvgEfficiency = recentData.reduce((sum, d) => sum + (d.efficiency_score || 1), 0) / recentData.length
+    const olderAvgEfficiency = olderData.reduce((sum, d) => sum + (d.efficiency_score || 1), 0) / Math.max(1, olderData.length)
+    
+    return {
+      profitTrend: recentAvgProfit > olderAvgProfit * 1.1 ? 'improving' : 
+                   recentAvgProfit < olderAvgProfit * 0.9 ? 'declining' : 'stable',
+      efficiencyTrend: recentAvgEfficiency > olderAvgEfficiency * 1.05 ? 'improving' : 
+                       recentAvgEfficiency < olderAvgEfficiency * 0.95 ? 'declining' : 'stable',
+      overallProgress: recentData[0]?.game_level > olderData[0]?.game_level ? 'advancing' : 'stagnant'
+    }
+  }
+  
+  // 履歴インサイト生成
+  private generateHistoricalInsights(trends: any): string[] {
+    const insights: string[] = []
+    
+    if (trends.profitTrend === 'improving') {
+      insights.push('収益性が継続的に改善されています。現在の戦略を維持してください。')
+    } else if (trends.profitTrend === 'declining') {
+      insights.push('収益性の低下が見られます。戦略の見直しを検討してください。')
+    }
+    
+    if (trends.efficiencyTrend === 'improving') {
+      insights.push('効率性が向上しています。さらなる最適化を目指してください。')
+    } else if (trends.efficiencyTrend === 'declining') {
+      insights.push('効率性の低下が見られます。施設やシステムの改善が必要です。')
+    }
+    
+    if (trends.overallProgress === 'stagnant') {
+      insights.push('成長が停滞しています。新しいチャレンジや投資を検討してください。')
+    }
+    
+    return insights
   }
 }
 

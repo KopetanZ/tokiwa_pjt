@@ -1,15 +1,18 @@
 'use client'
 
-import { useAuth } from '@/components/providers/AuthProvider'
+import { useAuth, useGameData } from '@/contexts/GameContext'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { formatMoney } from '@/lib/utils'
+import { MOCK_PROFILE } from '@/lib/mock-data'
 
 export default function DashboardPage() {
-  const { user, isLoading, authMethod } = useAuth()
+  const { user, isAuthenticated, isMockMode } = useAuth()
+  const gameData = useGameData()
+  const isLoading = false // 一時的にfalse固定
 
-  console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, authMethod })
+  console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, isAuthenticated, isMockMode, gameDataLoaded: !!gameData })
 
   // ローディング中の表示
   if (isLoading) {
@@ -20,15 +23,16 @@ export default function DashboardPage() {
           <div className="font-pixel text-retro-gb-dark">ダッシュボードを読み込み中...</div>
           <div className="w-16 h-2 bg-retro-gb-mid mx-auto animate-pulse"></div>
           <div className="font-pixel text-xs text-retro-gb-mid">
-            認証方法: {authMethod === 'supabase' ? 'Supabase' : 'ローカルストレージ'}
+            認証方法: Supabase
           </div>
         </div>
       </div>
     )
   }
 
-  // ユーザーが存在しない場合
-  if (!user) {
+  // ユーザーが存在しない場合（開発環境では表示を続行）
+  const isDevelopment = process.env.NODE_ENV === 'development'
+  if (!user && !isDevelopment) {
     console.log('📊 DashboardPage: ユーザーが存在しない、エラー表示')
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -42,17 +46,39 @@ export default function DashboardPage() {
     )
   }
 
-  console.log('📊 DashboardPage: メインコンテンツを表示', { user })
+  console.log('📊 DashboardPage: メインコンテンツを表示', { user, isMockMode })
+
+  // 開発環境でユーザーがいない場合の初期化案内
+  if (isDevelopment && !user && !isMockMode) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center space-y-4">
+          <div className="font-pixel text-retro-gb-dark">🎮 開発環境でゲームを体験</div>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            認証なしでゲームをテストできます
+          </div>
+          <PixelButton onClick={() => window.location.href = '/'}>
+            ホームに戻ってクイックスタート
+          </PixelButton>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
       <div className="text-center space-y-2">
         <h1 className="font-pixel-large text-retro-gb-dark">
-          {user.schoolName}
+          トキワシティ訓練所
         </h1>
         <p className="font-pixel text-xs text-retro-gb-mid">
-          館長: {user.guestName}
+          館長: {user?.email || (isMockMode ? '開発テスト館長' : 'ゲスト')}
+          {isMockMode && (
+            <span className="ml-2 px-2 py-1 bg-yellow-300 text-yellow-800 rounded text-xs">
+              🎮 DEV
+            </span>
+          )}
         </p>
       </div>
 
@@ -63,7 +89,7 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {formatMoney(user.currentMoney)}
+                {formatMoney(isMockMode ? MOCK_PROFILE.current_money : 50000)}
               </div>
             </div>
             <div className="space-y-2">
@@ -90,14 +116,14 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {user.totalReputation}
+                {isMockMode ? MOCK_PROFILE.total_reputation : 0}
               </div>
               <div className="font-pixel text-xs text-retro-gb-mid">
                 評判ポイント
               </div>
             </div>
             <PixelProgressBar 
-              value={user.totalReputation} 
+              value={isMockMode ? MOCK_PROFILE.total_reputation : 0} 
               max={1000} 
               color="hp"
               showLabel={true}
@@ -109,13 +135,13 @@ export default function DashboardPage() {
         <PixelCard title="現在の活動">
           <div className="space-y-3">
             <div className="font-pixel text-xs text-retro-gb-dark">
-              進行中の派遣: 2件
+              進行中の派遣: {isMockMode ? gameData.expeditions.length : 2}件
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              利用可能トレーナー: 3人
+              利用可能トレーナー: {isMockMode ? gameData.trainers.length : 3}人
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              総ポケモン数: 8匹
+              総ポケモン数: {isMockMode ? gameData.pokemon.length : 8}匹
             </div>
             <PixelButton size="sm" className="w-full">
               詳細を見る

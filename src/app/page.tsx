@@ -1,11 +1,13 @@
+'use client'
+
 import { GameBoyScreen } from '@/components/layout/GameBoyScreen'
-import { WelcomeScreen } from '@/components/welcome/WelcomeScreen'
+import { AuthWelcomeScreen } from '@/components/welcome/AuthWelcomeScreen'
 
 export default function HomePage() {
   return (
     <GameBoyScreen>
       <div className="min-h-screen flex items-center justify-center">
-        <WelcomeScreen />
+        <AuthWelcomeScreen />
       </div>
     </GameBoyScreen>
   )

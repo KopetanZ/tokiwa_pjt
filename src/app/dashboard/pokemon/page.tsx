@@ -5,6 +5,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { PokemonCard } from '@/components/pokemon/PokemonCard'
+import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState } from 'react'
 
 // Pokemon interface for this page (simplified)
@@ -121,25 +122,64 @@ const samplePokemon: SimplePokemon[] = [
 export default function PokemonPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'assigned' | 'injured'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  
+  const { isMockMode } = useAuth()
+  const gameData = useGameData()
+  const { addNotification } = useNotifications()
+  
+  // 実際のゲームデータまたはサンプルデータを使用
+  // モックデータを表示用の構造に変換
+  const pokemon = isMockMode ? 
+    gameData.pokemon.map(p => ({
+      id: p.id,
+      dexNumber: p.dex_number,
+      name: p.name,
+      nameEn: p.name.toLowerCase(),
+      level: p.level,
+      hp: p.hp,
+      maxHp: p.hp,
+      attack: p.attack,
+      defense: p.defense,
+      speed: p.speed,
+      types: p.types,
+      nature: p.nature || 'きまぐれ',
+      ability: 'ひでん', // デフォルト特性
+      status: p.status as 'available' | 'on_expedition' | 'injured' | 'training',
+      trainerId: null,
+      friendship: p.friendship,
+      moves: p.moves,
+      experience: p.level * 100,
+      nextLevelExp: (p.level + 1) * 100
+    })) : samplePokemon
 
-  const filteredPokemon = samplePokemon.filter(pokemon => {
-    const matchesSearch = pokemon.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         pokemon.nameEn.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredPokemon = pokemon.filter(poke => {
+    const matchesSearch = poke.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         poke.nameEn.toLowerCase().includes(searchQuery.toLowerCase())
     
     if (!matchesSearch) return false
     
-    if (selectedTab === 'available') return pokemon.status === 'available'
-    if (selectedTab === 'assigned') return pokemon.status === 'on_expedition'
-    if (selectedTab === 'injured') return pokemon.status === 'injured'
+    if (selectedTab === 'available') return poke.status === 'available'
+    if (selectedTab === 'assigned') return poke.status === 'on_expedition'
+    if (selectedTab === 'injured') return poke.status === 'injured'
     return true
   })
 
   const stats = {
-    total: samplePokemon.length,
-    available: samplePokemon.filter(p => p.status === 'available').length,
-    assigned: samplePokemon.filter(p => p.status === 'on_expedition').length,
-    injured: samplePokemon.filter(p => p.status === 'injured').length,
-    averageLevel: Math.round(samplePokemon.reduce((sum, p) => sum + p.level, 0) / samplePokemon.length)
+    total: pokemon.length,
+    available: pokemon.filter(p => p.status === 'available').length,
+    assigned: pokemon.filter(p => p.status === 'on_expedition').length,
+    injured: pokemon.filter(p => p.status === 'injured').length,
+    averageLevel: pokemon.length > 0 ? Math.round(pokemon.reduce((sum, p) => sum + p.level, 0) / pokemon.length) : 0
+  }
+  
+  const handlePokemonCare = (type: string, cost: number) => {
+    addNotification({
+      type: 'success',
+      message: `ポケモンの${type}を行いました！（費用: ₽${cost.toLocaleString()}）`
+    })
+    
+    // TODO: 実際のケア処理を実装
+    console.log('ポケモンケア:', { type, cost })
   }
 
   return (
@@ -328,7 +368,10 @@ export default function PokemonPage() {
                 {stats.injured}匹のポケモンが負傷しています
               </div>
               <div className="flex space-x-2">
-                <PixelButton size="sm">
+                <PixelButton 
+                  size="sm"
+                  onClick={() => handlePokemonCare('全体回復', stats.injured * 500)}
+                >
                   すべて回復 (₽{stats.injured * 500})
                 </PixelButton>
                 <PixelButton size="sm" variant="secondary">
@@ -342,19 +385,37 @@ export default function PokemonPage() {
             <div className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
               <div className="font-pixel text-xs text-retro-gb-dark">基本回復</div>
               <div className="font-pixel text-xs text-retro-gb-mid">HP全回復 - ₽500</div>
-              <PixelButton size="sm" className="w-full">利用する</PixelButton>
+              <PixelButton 
+                size="sm" 
+                className="w-full"
+                onClick={() => handlePokemonCare('基本回復', 500)}
+              >
+                利用する
+              </PixelButton>
             </div>
             
             <div className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
               <div className="font-pixel text-xs text-retro-gb-dark">なつき度向上</div>
               <div className="font-pixel text-xs text-retro-gb-mid">なつき度+10 - ₽1,000</div>
-              <PixelButton size="sm" className="w-full">利用する</PixelButton>
+              <PixelButton 
+                size="sm" 
+                className="w-full"
+                onClick={() => handlePokemonCare('なつき度向上', 1000)}
+              >
+                利用する
+              </PixelButton>
             </div>
             
             <div className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
               <div className="font-pixel text-xs text-retro-gb-dark">特訓コース</div>
               <div className="font-pixel text-xs text-retro-gb-mid">経験値+100 - ₽2,000</div>
-              <PixelButton size="sm" className="w-full">利用する</PixelButton>
+              <PixelButton 
+                size="sm" 
+                className="w-full"
+                onClick={() => handlePokemonCare('特訓コース', 2000)}
+              >
+                利用する
+              </PixelButton>
             </div>
           </div>
         </div>

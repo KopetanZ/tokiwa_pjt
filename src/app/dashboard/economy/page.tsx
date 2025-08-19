@@ -7,39 +7,71 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { economySystem, Transaction, BudgetCategory, FinancialStatus } from '@/lib/economy'
 import { formatMoney } from '@/lib/utils'
+import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { clsx } from 'clsx'
 
 export default function EconomyPage() {
   const [selectedTab, setSelectedTab] = useState<'overview' | 'transactions' | 'budget' | 'reports'>('overview')
-  const [financialStatus, setFinancialStatus] = useState<FinancialStatus | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [budget, setBudget] = useState<BudgetCategory[]>([])
-  const [monthlyReport, setMonthlyReport] = useState<any>(null)
-
-  useEffect(() => {
-    // 初期データ読み込み
-    updateFinancialData()
-  }, [])
-
-  const updateFinancialData = () => {
-    setFinancialStatus(economySystem.getFinancialStatus())
-    setTransactions(economySystem.getTransactions(20))
-    setBudget(economySystem.getBudgetStatus())
-    setMonthlyReport(economySystem.generateMonthlyReport())
-  }
+  
+  const { isMockMode } = useAuth()
+  const gameData = useGameData()
+  const { addNotification } = useNotifications()
+  
+  // モックデータまたは実際のデータを使用
+  const transactions = isMockMode ? gameData.transactions.map(t => ({
+    ...t,
+    timestamp: new Date(t.created_at),
+    relatedId: t.reference_id
+  })) : economySystem.getTransactions(20)
+  
+  const financialStatus = isMockMode ? {
+    balance: 100000,
+    monthlyIncome: 25000,
+    monthlyExpenses: 18000,
+    netIncome: 7000,
+    profitability: 28.0,
+    burnRate: Infinity, // 黒字のため無限大
+    totalAssets: 150000
+  } : economySystem.getFinancialStatus()
+  
+  const budget: BudgetCategory[] = [
+    {
+      id: '1',
+      name: '人件費',
+      allocated: 15000,
+      spent: 12000,
+      remaining: 3000,
+      percentage: 80,
+      isOverBudget: false
+    },
+    {
+      id: '2', 
+      name: '施設維持費',
+      allocated: 5000,
+      spent: 3500,
+      remaining: 1500,
+      percentage: 70,
+      isOverBudget: false
+    },
+    {
+      id: '3',
+      name: 'ポケモンケア',
+      allocated: 3000,
+      spent: 2800,
+      remaining: 200,
+      percentage: 93.3,
+      isOverBudget: false
+    }
+  ]
+  
+  const monthlyReport = isMockMode ? gameData.analysis[0] : economySystem.generateMonthlyReport()
 
   const handleQuickTransaction = (type: 'income' | 'expense', category: string, amount: number, description: string) => {
-    if (type === 'income') {
-      economySystem.recordIncome(category as any, amount, description)
-    } else {
-      if (economySystem.canAfford(amount)) {
-        economySystem.makePayment(category as any, amount, description)
-      } else {
-        alert('資金が不足しています')
-        return
-      }
-    }
-    updateFinancialData()
+    addNotification({
+      type: type === 'income' ? 'success' : 'info',
+      message: `${description}: ${type === 'income' ? '+' : '-'}₽${amount.toLocaleString()}`
+    })
+    console.log('取引実行:', { type, category, amount, description })
   }
 
   if (!financialStatus) {
@@ -344,7 +376,7 @@ export default function EconomyPage() {
               <div>
                 <h3 className="font-pixel text-sm text-retro-gb-dark mb-2">分析結果</h3>
                 <div className="space-y-2">
-                  {monthlyReport.insights.map((insight: string, index: number) => (
+                  {(isMockMode ? monthlyReport.recommendations : monthlyReport.insights || []).map((insight: string, index: number) => (
                     <div key={index} className="font-pixel text-xs text-retro-gb-mid p-2 bg-retro-gb-light border border-retro-gb-mid">
                       {insight}
                     </div>
@@ -360,11 +392,9 @@ export default function EconomyPage() {
                     { name: '新施設建設', amount: 20000, return: 8, months: 12 },
                     { name: '研究開発投資', amount: 10000, return: 15, months: 6 }
                   ].map((investment, index) => {
-                    const simulation = economySystem.simulateInvestment(
-                      investment.amount,
-                      investment.return,
-                      investment.months
-                    )
+                    // モックモード用の簡単な計算
+                    const totalReturn = investment.amount * (1 + (investment.return / 100))
+                    const roi = investment.return
                     
                     return (
                       <div key={index} className="border border-retro-gb-mid p-3">
@@ -374,14 +404,41 @@ export default function EconomyPage() {
                         <div className="space-y-1 font-pixel text-xs text-retro-gb-mid">
                           <div>投資額: {formatMoney(investment.amount)}</div>
                           <div>期間: {investment.months}ヶ月</div>
-                          <div>期待リターン: {formatMoney(simulation.totalReturn)}</div>
-                          <div>ROI: {simulation.roi.toFixed(1)}%</div>
+                          <div>期待リターン: {formatMoney(totalReturn)}</div>
+                          <div>ROI: {roi.toFixed(1)}%</div>
                         </div>
                       </div>
                     )
                   })}
                 </div>
               </div>
+
+              {/* 予測結果（モックモード用） */}
+              {isMockMode && monthlyReport.predicted_outcomes && (
+                <div>
+                  <h3 className="font-pixel text-sm text-retro-gb-dark mb-2">予測結果</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="border border-retro-gb-mid p-3">
+                      <div className="font-pixel text-sm text-retro-gb-dark">週次利益</div>
+                      <div className="font-pixel text-lg text-green-600">
+                        {formatMoney(monthlyReport.predicted_outcomes.weekly_profit)}
+                      </div>
+                    </div>
+                    <div className="border border-retro-gb-mid p-3">
+                      <div className="font-pixel text-sm text-retro-gb-dark">トレーナー成長</div>
+                      <div className="font-pixel text-lg text-blue-600">
+                        {monthlyReport.predicted_outcomes.trainer_growth}名
+                      </div>
+                    </div>
+                    <div className="border border-retro-gb-mid p-3">
+                      <div className="font-pixel text-sm text-retro-gb-dark">ポケモン進化</div>
+                      <div className="font-pixel text-lg text-purple-600">
+                        {monthlyReport.predicted_outcomes.pokemon_evolution}匹
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </PixelCard>
         </div>
