@@ -678,6 +678,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [supabase, state.isAuthenticated, state.authLoading, state.user, state.isMockMode])
 
+  // 認証状態の初期化完了を待つ
+  useEffect(() => {
+    // 認証の初期化が完了したら、適切な状態に設定
+    if (!state.authLoading) {
+      if (!state.isAuthenticated && !state.isMockMode) {
+        // 認証されていない場合は、ローディング状態を終了
+        dispatch({ type: 'SET_LOADING', payload: false })
+      }
+    }
+  }, [state.authLoading, state.isAuthenticated, state.isMockMode])
+
   return (
     <GameContext.Provider value={{ state, dispatch, actions }}>
       {children}

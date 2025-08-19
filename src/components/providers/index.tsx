@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { ThemeProvider } from './ThemeProvider'
 import { AuthProvider } from './AuthProvider'
 import { ToastProvider } from './ToastProvider'
+import { GameProvider } from '@/contexts/GameContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -24,11 +25,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </AuthProvider>
+        <GameProvider>
+          <AuthProvider>
+            <ToastProvider>
+              {children}
+            </ToastProvider>
+          </AuthProvider>
+        </GameProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

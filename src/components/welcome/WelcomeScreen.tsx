@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuth } from '@/contexts/GameContext'
+import { useAuth } from '@/components/providers/AuthProvider'
 // import { useToast } from '@/components/providers/ToastProvider'
 
 export function WelcomeScreen() {
@@ -12,7 +12,7 @@ export function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -88,7 +88,7 @@ export function WelcomeScreen() {
     setIsLoading(true)
     try {
       console.log('🎮 WelcomeScreen: login関数を呼び出し')
-      // await login(guestName, schoolName)
+      await login(guestName, schoolName)
       console.log('🎮 WelcomeScreen: ログイン成功')
       console.log(`${schoolName}へようこそ、${guestName}館長！`)
       // ダッシュボードにリダイレクト
@@ -96,7 +96,7 @@ export function WelcomeScreen() {
       window.location.href = '/dashboard'
     } catch (error) {
       console.error('🎮 WelcomeScreen: ログイン失敗', error)
-      console.log('ログインに失敗しました')
+      setError('ログインに失敗しました')
     } finally {
       setIsLoading(false)
     }

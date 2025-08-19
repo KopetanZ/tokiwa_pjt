@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User } from '@/types/auth'
 import { supabase, isSupabaseAvailable } from '@/lib/supabase'
+import { useGame } from '@/contexts/GameContext'
 
 interface AuthContextType {
   user: User | null
@@ -19,6 +20,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [authMethod, setAuthMethod] = useState<'supabase' | 'local'>('local')
+  
+  // GameContextから認証状態を取得
+  const { state: gameState, actions: gameActions } = useGame()
 
   useEffect(() => {
     // 初期化時にローカルストレージから認証情報を復元
@@ -111,6 +115,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer)
   }, [])
 
+  // GameContextの認証状態と同期
+  useEffect(() => {
+    if (gameState.isMockMode && gameState.isAuthenticated) {
+      // モックモードが有効で認証済みの場合
+      console.log('🔐 AuthProvider: GameContextのモックモードと同期')
+      setUser({
+        id: gameState.user?.id || 'mock-user',
+        guestName: 'モックユーザー',
+        schoolName: 'モック学校',
+        currentMoney: 50000,
+        totalReputation: 0,
+        uiTheme: 'gameboy_green',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })
+      setAuthMethod('local')
+      setIsLoading(false)
+    } else if (!gameState.isLoading && !gameState.isAuthenticated) {
+      // 認証されていない場合
+      console.log('🔐 AuthProvider: GameContextで未認証状態を検出')
+      setUser(null)
+      setIsLoading(false)
+    }
+  }, [gameState.isMockMode, gameState.isAuthenticated, gameState.isLoading, gameState.user])
+
+  // 初期化完了後の状態確認
+  useEffect(() => {
+    if (!isLoading && !user && !gameState.isMockMode) {
+      // 初期化完了後、ユーザーがおらず、モックモードでもない場合
+      console.log('🔐 AuthProvider: 初期化完了、未認証状態')
+      setIsLoading(false)
+    }
+  }, [isLoading, user, gameState.isMockMode])
+
   // authMethodの変更をログ出力
   useEffect(() => {
     console.log('🔐 AuthProvider: 認証方法が変更されました:', authMethod)
@@ -133,6 +171,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       setUser(newUser)
       localStorage.setItem('tokiwa_user', JSON.stringify(newUser))
+      
+      // GameContextのモックモードを有効化
+      if (gameActions) {
+        gameActions.enableMockMode()
+      }
     } catch (error) {
       console.error('Login failed:', error)
       throw error
@@ -144,6 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     setUser(null)
     localStorage.removeItem('tokiwa_user')
+    
+    // GameContextのモックモードを無効化
+    if (gameActions) {
+      gameActions.disableMockMode()
+    }
   }
 
   return (
