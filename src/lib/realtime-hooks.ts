@@ -244,7 +244,7 @@ export function useTrainers(userId: string) {
           .from('trainers')
           .select('*')
           .eq('user_id', userId)
-          .order('hired_at', { ascending: false })
+          .order('created_at', { ascending: false })
       })
     },
     { enabled: !!userId }
