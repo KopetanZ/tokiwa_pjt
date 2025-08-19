@@ -98,7 +98,7 @@ export function SessionWarningManager() {
     minutesInactive: 0
   })
 
-  const { logout } = useAuth()
+  const { signOut } = useAuth()
 
   useEffect(() => {
     // セッション警告の監視を設定
@@ -156,7 +156,7 @@ export function SessionWarningManager() {
     })
   }
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     // セッション情報をクリア
     try {
       localStorage.removeItem('tokiwa-session-state')
@@ -171,7 +171,12 @@ export function SessionWarningManager() {
       minutesInactive: 0
     })
     
-    logout()
+    // signOut関数を呼び出し
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('サインアウトエラー:', error)
+    }
   }
 
   // 警告が非表示の場合は何も表示しない

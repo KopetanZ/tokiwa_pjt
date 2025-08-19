@@ -407,7 +407,7 @@ export class AuthSessionManager {
   private async clearAllSessionData(): Promise<void> {
     try {
       // ローカルストレージをクリア
-      localStorage.removeItem(this.sessionState.sessionStorageKey)
+      localStorage.removeItem(SESSION_CONFIG.sessionStorageKey)
       localStorage.removeItem('tokiwa_user')
       
       // セッションストレージをクリア
