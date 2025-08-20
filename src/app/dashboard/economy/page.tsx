@@ -66,12 +66,48 @@ export default function EconomyPage() {
   
   const monthlyReport = isMockMode ? gameData.analysis[0] : economySystem.generateMonthlyReport()
 
-  const handleQuickTransaction = (type: 'income' | 'expense', category: string, amount: number, description: string) => {
-    addNotification({
-      type: type === 'income' ? 'success' : 'info',
-      message: `${description}: ${type === 'income' ? '+' : '-'}₽${amount.toLocaleString()}`
-    })
-    console.log('取引実行:', { type, category, amount, description })
+  const handleQuickTransaction = async (type: 'income' | 'expense', category: string, amount: number, description: string) => {
+    try {
+      const { gameController } = await import('@/lib/game-logic')
+      
+      // 資金チェック（支出の場合）
+      if (type === 'expense') {
+        const canAfford = gameController.checkCanAfford(amount)
+        if (!canAfford) {
+          addNotification({
+            type: 'error',
+            message: `資金が不足しています。必要: ₽${amount.toLocaleString()}`
+          })
+          return
+        }
+      }
+      
+      // 取引記録
+      const result = gameController.recordTransaction(type, category, amount, description)
+      
+      if (result) {
+        addNotification({
+          type: type === 'income' ? 'success' : 'info',
+          message: `${description}: ${type === 'income' ? '+' : '-'}₽${amount.toLocaleString()}`
+        })
+        
+        // データ更新のため画面リロード（簡易実装）
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else {
+        addNotification({
+          type: 'error',
+          message: type === 'expense' ? '資金が不足しています' : '取引の記録に失敗しました'
+        })
+      }
+    } catch (error) {
+      console.error('取引処理エラー:', error)
+      addNotification({
+        type: 'error',
+        message: '取引処理中にエラーが発生しました'
+      })
+    }
   }
 
   if (!financialStatus) {

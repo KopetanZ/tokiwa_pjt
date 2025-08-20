@@ -6,7 +6,7 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { TrainerCard } from '@/components/trainers/TrainerCard'
 import { TrainerSummary } from '@/types/trainer'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // サンプルデータ
 const sampleTrainers: TrainerSummary[] = [
@@ -81,10 +81,26 @@ const sampleTrainers: TrainerSummary[] = [
 export default function TrainersPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
   const [showHiringModal, setShowHiringModal] = useState(false)
+  const [availableCandidates, setAvailableCandidates] = useState<any[]>([])
   
   const { isMockMode } = useAuth()
   const gameData = useGameData()
   const { addNotification } = useNotifications()
+  
+  // 雇用候補者データの読み込み
+  useEffect(() => {
+    const loadCandidates = async () => {
+      try {
+        const { gameController } = await import('@/lib/game-logic')
+        const candidates = gameController.getAvailableTrainerCandidates()
+        setAvailableCandidates(candidates)
+      } catch (error) {
+        console.error('候補者データ読み込みエラー:', error)
+      }
+    }
+    
+    loadCandidates()
+  }, [])
   
   // 実際のゲームデータまたはサンプルデータを使用
   // モックデータを表示用の構造に変換
@@ -126,15 +142,33 @@ export default function TrainersPage() {
     totalSalary: trainers.reduce((sum, t) => sum + (t.salary || 0), 0)
   }
   
-  const handleHireTrainer = (trainerName: string, cost: number) => {
-    // 雇用処理
-    addNotification({
-      type: 'success',
-      message: `${trainerName}を雇用しました！（費用: ₽${cost.toLocaleString()}）`
-    })
-    
-    // TODO: 実際の雇用ロジックを実装
-    console.log('雇用処理:', { trainerName, cost })
+  const handleHireTrainer = async (trainerName: string, job: string, cost: number) => {
+    try {
+      // gameControllerを使用して実際の雇用処理
+      const { gameController } = await import('@/lib/game-logic')
+      const result = await gameController.hireTrainer(trainerName, job, 1)
+      
+      if (result.success) {
+        addNotification({
+          type: 'success',
+          message: `${trainerName}を雇用しました！（費用: ₽${result.cost?.toLocaleString()}）`
+        })
+        
+        // 画面更新のためのトレーナーリスト再読み込み
+        window.location.reload() // 簡易的な更新
+      } else {
+        addNotification({
+          type: 'error',
+          message: result.message
+        })
+      }
+    } catch (error) {
+      console.error('雇用処理エラー:', error)
+      addNotification({
+        type: 'error',
+        message: '雇用処理中にエラーが発生しました'
+      })
+    }
   }
 
   return (
@@ -221,30 +255,39 @@ export default function TrainersPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[
-              { name: 'エリカ', job: 'リサーチャー', cost: 5000, specialty: '発見特化' },
-              { name: 'ナツメ', job: 'メディック', cost: 8000, specialty: '回復特化' },
-              { name: 'カツラ', job: 'レンジャー', cost: 4500, specialty: '捕獲特化' }
-            ].map((candidate, index) => (
+            {availableCandidates.map((candidate, index) => (
               <div key={index} className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
                 <div className="font-pixel text-xs text-retro-gb-dark">
                   {candidate.name}
                 </div>
                 <div className="font-pixel text-xs text-retro-gb-mid">
-                  {candidate.job} ({candidate.specialty})
+                  {candidate.jobNameJa} ({candidate.specialty})
+                </div>
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  Lv.{candidate.level} | 性格: {candidate.preview.personality}
                 </div>
                 <div className="font-pixel text-xs text-retro-gb-dark">
-                  雇用費: ₽{candidate.cost.toLocaleString()}
+                  雇用費: ₽{candidate.hireCost.toLocaleString()}
+                </div>
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  月給: ₽{candidate.preview.expectedSalary.toLocaleString()}
                 </div>
                 <PixelButton 
                   size="sm" 
                   className="w-full"
-                  onClick={() => handleHireTrainer(candidate.name, candidate.cost)}
+                  onClick={() => handleHireTrainer(candidate.name, candidate.job, candidate.hireCost)}
                 >
                   雇用する
                 </PixelButton>
               </div>
             ))}
+            {availableCandidates.length === 0 && (
+              <div className="col-span-full text-center py-4">
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  候補者を読み込み中...
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </PixelCard>

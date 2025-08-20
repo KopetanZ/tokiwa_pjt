@@ -392,6 +392,117 @@ export class TrainerSystem {
     return baseSalaries[job] + (level * 2000)
   }
 
+  // 新規トレーナーの雇用
+  static hireNewTrainer(
+    name: string,
+    job: TrainerJob,
+    initialLevel: number = 1
+  ): { trainer: TrainerStats; hireCost: number } {
+    const personality = this.generatePersonality()
+    const skills = this.generateBaseSkills(job, initialLevel)
+    const baseSalary = this.calculateBaseSalary(job, initialLevel)
+    
+    // 雇用コストの計算（基本給の3-5倍）
+    const hireCostMultiplier = gameRandom.range(3.0, 5.0)
+    const hireCost = Math.floor(baseSalary * hireCostMultiplier)
+    
+    const trainer: TrainerStats = {
+      level: initialLevel,
+      experience: this.EXPERIENCE_TABLE[initialLevel - 1] || 0,
+      name,
+      job,
+      specialization: [],
+      skills,
+      trust_level: gameRandom.integer(30, 60), // 初期信頼度
+      personality,
+      hire_date: new Date().toISOString(),
+      salary_base: baseSalary,
+      performance_bonus: 0,
+      total_expeditions: 0,
+      successful_expeditions: 0,
+      pokemon_caught: 0,
+      total_money_earned: 0,
+      injuries_sustained: 0,
+      favorite_location_types: []
+    }
+    
+    return { trainer, hireCost }
+  }
+
+  // 利用可能なトレーナー候補の生成
+  static generateTrainerCandidates(): Array<{
+    name: string
+    job: TrainerJob
+    jobNameJa: string
+    level: number
+    hireCost: number
+    specialty: string
+    preview: {
+      estimatedSkills: Partial<TrainerSkills>
+      personality: string
+      expectedSalary: number
+    }
+  }> {
+    const candidateNames = [
+      'エリカ', 'ナツメ', 'カツラ', 'キョウ', 'アンズ', 'シバ', 
+      'イブキ', 'ハヤト', 'ツクシ', 'アカネ', 'マツバ', 'ミカン'
+    ]
+    
+    const jobInfo: Record<TrainerJob, { nameJa: string; specialty: string }> = {
+      ranger: { nameJa: 'レンジャー', specialty: '捕獲特化' },
+      explorer: { nameJa: 'エクスプローラー', specialty: '探索特化' },
+      researcher: { nameJa: 'リサーチャー', specialty: '発見特化' },
+      battler: { nameJa: 'バトラー', specialty: '戦闘特化' },
+      coordinator: { nameJa: 'コーディネーター', specialty: '総合特化' }
+    }
+    
+    const jobs: TrainerJob[] = ['ranger', 'explorer', 'researcher', 'battler', 'coordinator']
+    const candidates = []
+    
+    for (let i = 0; i < Math.min(candidateNames.length, 6); i++) {
+      const name = candidateNames[i]
+      const job = jobs[gameRandom.integer(0, jobs.length - 1)]
+      const level = gameRandom.integer(1, 3)
+      const { trainer, hireCost } = this.hireNewTrainer(name, job, level)
+      
+      candidates.push({
+        name,
+        job,
+        jobNameJa: jobInfo[job].nameJa,
+        level,
+        hireCost,
+        specialty: jobInfo[job].specialty,
+        preview: {
+          estimatedSkills: {
+            pokemon_handling: trainer.skills.pokemon_handling,
+            navigation: trainer.skills.navigation,
+            battle_tactics: trainer.skills.battle_tactics
+          },
+          personality: this.getPersonalityDescription(trainer.personality),
+          expectedSalary: trainer.salary_base
+        }
+      })
+    }
+    
+    return candidates
+  }
+
+  // 性格の説明テキスト生成
+  private static getPersonalityDescription(personality: TrainerPersonality): string {
+    const traits = []
+    
+    if (personality.courage > 5) traits.push('勇敢')
+    else if (personality.courage < -5) traits.push('慎重')
+    
+    if (personality.curiosity > 5) traits.push('好奇心旺盛')
+    else if (personality.curiosity < -5) traits.push('保守的')
+    
+    if (personality.teamwork > 5) traits.push('協調性あり')
+    else if (personality.independence > 5) traits.push('独立志向')
+    
+    return traits.length > 0 ? traits.join('・') : 'バランス型'
+  }
+
   // トレーナーの詳細ステータス表示用フォーマット
   static formatTrainerDetails(trainer: TrainerStats): string {
     const expInfo = this.getExperienceToNextLevel(trainer.experience)

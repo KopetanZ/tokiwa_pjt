@@ -66,7 +66,7 @@ export class EconomySystem {
     amount: number,
     description: string,
     referenceId?: string
-  ): void {
+  ): boolean {
     const transaction: Transaction = {
       id: `income_${Date.now()}_${gameRandom.integer(1000, 9999)}`,
       type: 'income',
@@ -81,6 +81,7 @@ export class EconomySystem {
     this.currentMoney += amount
     
     console.log(`💰 収入: +¥${amount.toLocaleString()} (${description})`)
+    return true
   }
 
   // 支出を記録
@@ -167,6 +168,11 @@ export class EconomySystem {
     }
     
     return jobMultipliers[jobName] || 1.0
+  }
+
+  // 資金チェック機能
+  checkCanAfford(amount: number): boolean {
+    return this.currentMoney >= amount
   }
 
   // トレーナー給与計算

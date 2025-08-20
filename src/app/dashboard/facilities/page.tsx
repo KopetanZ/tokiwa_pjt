@@ -92,6 +92,50 @@ export default function FacilitiesPage() {
     }
   }
 
+  const handleStartResearch = async (projectId: string) => {
+    try {
+      // 研究開始の実装
+      const researchCost = 5000 // 基本研究費
+      
+      const { gameController } = await import('@/lib/game-logic')
+      const canAfford = gameController.checkCanAfford(researchCost)
+      
+      if (!canAfford) {
+        addNotification({
+          type: 'error',
+          message: `資金が不足しています。必要: ₽${researchCost.toLocaleString()}`
+        })
+        return
+      }
+      
+      const paymentResult = gameController.recordTransaction(
+        'expense',
+        'maintenance',
+        researchCost,
+        '施設研究費'
+      )
+      
+      if (paymentResult) {
+        addNotification({
+          type: 'success',
+          message: `研究を開始しました！（費用: ₽${researchCost.toLocaleString()}）`
+        })
+        // 実際の研究プロジェクト開始処理をここに追加
+      } else {
+        addNotification({
+          type: 'error',
+          message: '研究費の支払いに失敗しました'
+        })
+      }
+    } catch (error) {
+      console.error('研究開始エラー:', error)
+      addNotification({
+        type: 'error',
+        message: '研究開始に失敗しました'
+      })
+    }
+  }
+
   const handleCompleteUpgradeInstantly = async (projectId: string) => {
     const success = await facilitySystem.completeUpgradeInstantly(projectId)
     if (success) {
@@ -531,7 +575,7 @@ export default function FacilitiesPage() {
                     {project.status === 'available' && (
                       <PixelButton
                         size="sm"
-                        onClick={() => console.log('研究開始:', project.id)}
+                        onClick={() => handleStartResearch(project.id)}
                         className="w-full"
                       >
                         研究開始

@@ -11,12 +11,14 @@ export * from './pokemon-system'
 export * from './economy-system'
 export * from './sound-system'
 export * from './random-system'
+export * from './trainer-system'
 
 // メインゲームコントローラー
 import { expeditionSystem, ExpeditionParams, ExpeditionResult, EXPEDITION_LOCATIONS } from './expedition-system'
 import { pokemonSystem, PokemonSystem, CaptureAttempt } from './pokemon-system'
 import { economySystem, EconomySystem } from './economy-system'
 import { soundSystem, SoundSystem, playExpeditionStartSound, playPokemonCatchSound, playMoneySound, playLevelUpSound } from './sound-system'
+import { TrainerSystem } from './trainer-system'
 import { gameRandom } from './random-system'
 
 /**
@@ -241,6 +243,332 @@ export class GameController {
     return result
   }
   
+  // トレーナー雇用機能
+  async hireTrainer(name: string, job: string, level: number = 1): Promise<{
+    success: boolean
+    message: string
+    trainer?: any
+    cost?: number
+  }> {
+    try {
+      const trainerJob = job as any // TrainerJob型変換
+      const { trainer, hireCost } = TrainerSystem.hireNewTrainer(name, trainerJob, level)
+      
+      // 資金チェック
+      const canAfford = this.checkCanAfford(hireCost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${hireCost.toLocaleString()}`
+        }
+      }
+      
+      // 雇用費用の支払い
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'salary',
+        hireCost,
+        `${name} 雇用費用`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '雇用費用の支払いに失敗しました'
+        }
+      }
+      
+      console.log('🎯 新規トレーナー雇用完了:', {
+        name: trainer.name,
+        job: trainer.job,
+        level: trainer.level,
+        hireCost,
+        salary: trainer.salary_base,
+        skills: trainer.skills
+      })
+      
+      return {
+        success: true,
+        message: `${name}を雇用しました！`,
+        trainer,
+        cost: hireCost
+      }
+      
+    } catch (error) {
+      console.error('トレーナー雇用エラー:', error)
+      return {
+        success: false,
+        message: 'トレーナー雇用に失敗しました'
+      }
+    }
+  }
+
+  // 利用可能なトレーナー候補の取得
+  getAvailableTrainerCandidates() {
+    return TrainerSystem.generateTrainerCandidates()
+  }
+
+  // ポケモンケア機能群
+  async healPokemon(pokemonId: string, healType: 'basic' | 'full'): Promise<{
+    success: boolean
+    message: string
+    cost?: number
+    healedAmount?: number
+  }> {
+    try {
+      // 実際の実装では、pokemonIdからPokemonInstanceを取得する必要があります
+      // ここではサンプルデータを使用
+      const samplePokemon: any = {
+        id: pokemonId,
+        species: { base_stats: { hp: 50 } },
+        level: 10,
+        current_hp: 15,
+        max_hp: 35,
+        status_condition: 'healthy' as const,
+        individual_values: { hp: 15, attack: 12, defense: 14, special_attack: 10, special_defense: 12, speed: 13 }
+      }
+      
+      const result = pokemonSystem.healPokemon(samplePokemon, healType)
+      
+      // 資金チェックと支払い
+      const canAfford = this.checkCanAfford(result.cost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${result.cost.toLocaleString()}`
+        }
+      }
+      
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'maintenance',
+        result.cost,
+        `ポケモン回復 (${healType})`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '支払い処理に失敗しました'
+        }
+      }
+      
+      return {
+        success: true,
+        message: `ポケモンが回復しました！HP +${result.healedAmount}`,
+        cost: result.cost,
+        healedAmount: result.healedAmount
+      }
+    } catch (error) {
+      console.error('ポケモン回復エラー:', error)
+      return {
+        success: false,
+        message: 'ポケモンの回復に失敗しました'
+      }
+    }
+  }
+
+  async increasePokemonFriendship(pokemonId: string, treatmentType: 'basic' | 'premium'): Promise<{
+    success: boolean
+    message: string
+    cost?: number
+    friendshipIncrease?: number
+  }> {
+    try {
+      const samplePokemon: any = {
+        id: pokemonId,
+        friendship: 100
+      }
+      
+      const result = pokemonSystem.increaseFriendship(samplePokemon, treatmentType)
+      
+      const canAfford = this.checkCanAfford(result.cost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${result.cost.toLocaleString()}`
+        }
+      }
+      
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'maintenance',
+        result.cost,
+        `なつき度向上 (${treatmentType})`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '支払い処理に失敗しました'
+        }
+      }
+      
+      return {
+        success: true,
+        message: `なつき度が上がりました！+${result.friendshipIncrease}`,
+        cost: result.cost,
+        friendshipIncrease: result.friendshipIncrease
+      }
+    } catch (error) {
+      console.error('なつき度向上エラー:', error)
+      return {
+        success: false,
+        message: 'なつき度向上に失敗しました'
+      }
+    }
+  }
+
+  async trainPokemon(pokemonId: string, trainingType: 'basic' | 'intensive'): Promise<{
+    success: boolean
+    message: string
+    cost?: number
+    experienceGained?: number
+    levelUp?: boolean
+    newLevel?: number
+  }> {
+    try {
+      const samplePokemon: any = {
+        id: pokemonId,
+        species: { base_stats: { hp: 50 } },
+        level: 8,
+        experience: 200,
+        max_hp: 30,
+        current_hp: 30,
+        individual_values: { hp: 15, attack: 12, defense: 14, special_attack: 10, special_defense: 12, speed: 13 }
+      }
+      
+      const result = pokemonSystem.trainPokemon(samplePokemon, trainingType)
+      
+      const canAfford = this.checkCanAfford(result.cost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${result.cost.toLocaleString()}`
+        }
+      }
+      
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'maintenance',
+        result.cost,
+        `ポケモン特訓 (${trainingType})`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '支払い処理に失敗しました'
+        }
+      }
+      
+      let message = `特訓完了！経験値 +${result.experienceGained}`
+      if (result.levelUp) {
+        message += ` レベルアップ！Lv.${result.newLevel}になりました！`
+      }
+      
+      return {
+        success: true,
+        message,
+        cost: result.cost,
+        experienceGained: result.experienceGained,
+        levelUp: result.levelUp,
+        newLevel: result.newLevel
+      }
+    } catch (error) {
+      console.error('ポケモン特訓エラー:', error)
+      return {
+        success: false,
+        message: 'ポケモンの特訓に失敗しました'
+      }
+    }
+  }
+
+  async healAllPokemon(healType: 'basic' | 'full'): Promise<{
+    success: boolean
+    message: string
+    totalCost?: number
+    healedCount?: number
+  }> {
+    try {
+      // 実際の実装では、全ポケモンを取得する必要があります
+      const samplePokemonList: any[] = [
+        { id: '1', current_hp: 10, max_hp: 25, status_condition: 'healthy' },
+        { id: '2', current_hp: 8, max_hp: 20, status_condition: 'poisoned' },
+        { id: '3', current_hp: 15, max_hp: 30, status_condition: 'healthy' }
+      ]
+      
+      const injuredPokemon = samplePokemonList.filter(p => 
+        p.current_hp < p.max_hp || p.status_condition !== 'healthy'
+      )
+      
+      if (injuredPokemon.length === 0) {
+        return {
+          success: true,
+          message: '回復が必要なポケモンはいません',
+          totalCost: 0,
+          healedCount: 0
+        }
+      }
+      
+      const result = pokemonSystem.healAllPokemon(samplePokemonList, healType)
+      
+      const canAfford = this.checkCanAfford(result.totalCost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${result.totalCost.toLocaleString()}`
+        }
+      }
+      
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'maintenance',
+        result.totalCost,
+        `全体回復 (${healType})`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '支払い処理に失敗しました'
+        }
+      }
+      
+      return {
+        success: true,
+        message: `${result.healedPokemon}匹のポケモンが回復しました！`,
+        totalCost: result.totalCost,
+        healedCount: result.healedPokemon
+      }
+    } catch (error) {
+      console.error('全体回復エラー:', error)
+      return {
+        success: false,
+        message: '全体回復に失敗しました'
+      }
+    }
+  }
+
+  // 経済取引記録
+  recordTransaction(
+    type: 'income' | 'expense',
+    category: string,
+    amount: number,
+    description: string
+  ): boolean {
+    if (type === 'income') {
+      return this.economySystem.recordIncome(category as any, amount, description, 'manual')
+    } else {
+      return this.economySystem.recordExpense(category as any, amount, description, 'manual')
+    }
+  }
+
+  // 資金チェック
+  checkCanAfford(amount: number): boolean {
+    return this.economySystem.checkCanAfford(amount)
+  }
+
   // デバッグ用: 資金追加
   addDebugMoney(amount: number) {
     this.economySystem.recordIncome('bonus', amount, 'デバッグ用資金追加', 'debug')

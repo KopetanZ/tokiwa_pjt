@@ -817,6 +817,151 @@ export class PokemonSystem {
   getAllPokemonSpecies(): PokemonSpecies[] {
     return Object.values(POKEMON_SPECIES_DATA)
   }
+
+  // ポケモンケア機能
+  healPokemon(pokemon: PokemonInstance, healType: 'basic' | 'full'): {
+    success: boolean
+    newHp: number
+    healedAmount: number
+    cost: number
+  } {
+    const cost = healType === 'full' ? 800 : 300
+    const healAmount = healType === 'full' ? pokemon.max_hp : Math.floor(pokemon.max_hp * 0.5)
+    
+    const newHp = Math.min(pokemon.max_hp, pokemon.current_hp + healAmount)
+    const actualHealedAmount = newHp - pokemon.current_hp
+    
+    // ポケモンの状態を更新
+    pokemon.current_hp = newHp
+    if (healType === 'full') {
+      pokemon.status_condition = 'healthy'
+    }
+    
+    return {
+      success: true,
+      newHp,
+      healedAmount: actualHealedAmount,
+      cost
+    }
+  }
+
+  // なつき度向上
+  increaseFriendship(pokemon: PokemonInstance, treatmentType: 'basic' | 'premium'): {
+    success: boolean
+    friendshipIncrease: number
+    cost: number
+  } {
+    const cost = treatmentType === 'premium' ? 1200 : 500
+    const baseIncrease = treatmentType === 'premium' ? 20 : 10
+    
+    // ランダム要素を追加
+    const actualIncrease = gameRandom.integer(
+      Math.floor(baseIncrease * 0.7), 
+      Math.floor(baseIncrease * 1.3)
+    )
+    
+    // なつき度の上限は255
+    const friendship = Math.min(255, (pokemon as any).friendship || 0)
+    const newFriendship = Math.min(255, friendship + actualIncrease)
+    
+    // ポケモンデータを更新
+    ;(pokemon as any).friendship = newFriendship
+    
+    return {
+      success: true,
+      friendshipIncrease: newFriendship - friendship,
+      cost
+    }
+  }
+
+  // 特訓コース
+  trainPokemon(pokemon: PokemonInstance, trainingType: 'basic' | 'intensive'): {
+    success: boolean
+    experienceGained: number
+    levelUp: boolean
+    newLevel: number
+    cost: number
+  } {
+    const cost = trainingType === 'intensive' ? 2500 : 1200
+    const baseExp = trainingType === 'intensive' ? 200 : 100
+    
+    // レベルによる補正
+    const levelMultiplier = 1.0 + (pokemon.level * 0.1)
+    const expGained = Math.floor(baseExp * levelMultiplier * gameRandom.range(0.8, 1.2))
+    
+    const oldLevel = pokemon.level
+    pokemon.experience += expGained
+    
+    // レベルアップ計算（簡易）
+    const expForNextLevel = Math.pow(pokemon.level + 1, 3)
+    let newLevel = oldLevel
+    
+    while (pokemon.experience >= Math.pow(newLevel + 1, 3) && newLevel < 100) {
+      newLevel++
+    }
+    
+    pokemon.level = newLevel
+    
+    // レベルアップ時のステータス更新
+    if (newLevel > oldLevel) {
+      this.updateStatsOnLevelUp(pokemon, newLevel - oldLevel)
+    }
+    
+    return {
+      success: true,
+      experienceGained: expGained,
+      levelUp: newLevel > oldLevel,
+      newLevel,
+      cost
+    }
+  }
+
+  // 全体回復（複数ポケモン）
+  healAllPokemon(pokemonList: PokemonInstance[], healType: 'basic' | 'full'): {
+    success: boolean
+    healedPokemon: number
+    totalCost: number
+    results: Array<{
+      pokemonId: string
+      healedAmount: number
+    }>
+  } {
+    const results: Array<{ pokemonId: string; healedAmount: number }> = []
+    let totalCost = 0
+    let healedCount = 0
+    
+    for (const pokemon of pokemonList) {
+      if (pokemon.current_hp < pokemon.max_hp || pokemon.status_condition !== 'healthy') {
+        const result = this.healPokemon(pokemon, healType)
+        results.push({
+          pokemonId: pokemon.id,
+          healedAmount: result.healedAmount
+        })
+        totalCost += result.cost
+        healedCount++
+      }
+    }
+    
+    return {
+      success: true,
+      healedPokemon: healedCount,
+      totalCost,
+      results
+    }
+  }
+
+  // レベルアップ時のステータス更新
+  private updateStatsOnLevelUp(pokemon: PokemonInstance, levelsGained: number): void {
+    const species = pokemon.species
+    const ivs = pokemon.individual_values
+    
+    // 新しい最大HPを計算
+    const newMaxHp = this.calculateStat(species.base_stats.hp, pokemon.level, ivs.hp)
+    const hpGain = newMaxHp - pokemon.max_hp
+    
+    pokemon.max_hp = newMaxHp
+    pokemon.current_hp = Math.min(pokemon.max_hp, pokemon.current_hp + hpGain)
+  }
 }
 
 export const pokemonSystem = new PokemonSystem()

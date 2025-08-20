@@ -153,25 +153,36 @@ describe('統合テスト: ゲームシステム全体', () => {
       // 遭遇した場合の構造テスト
       if (encounter && typeof encounter === 'object') {
         expect(encounter.id).toBeDefined()
-        expect(encounter.name || encounter.name_ja).toBeDefined()
+        expect(encounter.name_ja || encounter.name_en).toBeDefined()
       }
     })
 
     test('ポケモン捕獲試行', () => {
       const mockSpecies = {
         id: 25,
-        name: 'ピカチュウ',
+        name_ja: 'ピカチュウ',
+        name_en: 'Pikachu',
         catch_rate: 190,
         types: ['electric'],
-        base_stats: { hp: 35, attack: 55 },
-        habitat: ['forest', 'grassland']
+        base_stats: { 
+          hp: 35, 
+          attack: 55, 
+          defense: 40, 
+          special_attack: 50, 
+          special_defense: 50, 
+          speed: 90 
+        },
+        habitat: ['forest', 'grassland'],
+        rarity_tier: 'uncommon' as const,
+        description_ja: '頬の両側に小さい電気袋を持つ。ピンチの時に放電する。'
       }
       
       const captureAttempt = {
         species: mockSpecies,
         location: EXPEDITION_LOCATIONS[0],
         trainer: { level: 10 },
-        party: []
+        party: [],
+        strategy: 'balanced'
       }
 
       const result = pokemonSystem.attemptCapture(captureAttempt)
@@ -193,12 +204,12 @@ describe('統合テスト: ゲームシステム全体', () => {
       expect(economySystem.getCurrentMoney()).toBe(initialMoney + 5000)
       
       // 支出記録
-      const expenseResult = economySystem.recordExpense('facility_upgrade', 3000, '施設アップグレード', 'upgrade')
+      const expenseResult = economySystem.recordExpense('upgrade', 3000, '施設アップグレード', 'upgrade')
       expect(expenseResult).toBe(true)
       expect(economySystem.getCurrentMoney()).toBe(initialMoney + 5000 - 3000)
       
       // 残高不足の場合
-      const largeExpenseResult = economySystem.recordExpense('facility_upgrade', 100000, '大型支出', 'upgrade')
+      const largeExpenseResult = economySystem.recordExpense('upgrade', 100000, '大型支出', 'upgrade')
       expect(largeExpenseResult).toBe(false)
       expect(economySystem.getCurrentMoney()).toBe(initialMoney + 5000 - 3000) // 変わらない
     })
@@ -207,7 +218,7 @@ describe('統合テスト: ゲームシステム全体', () => {
       // いくつか取引を記録
       economySystem.recordIncome('expedition', 2000, 'テスト収入1', 'reward')
       economySystem.recordIncome('expedition', 3000, 'テスト収入2', 'reward')
-      economySystem.recordExpense('facility_maintenance', 1000, 'テスト支出', 'maintenance')
+      economySystem.recordExpense('maintenance', 1000, 'テスト支出', 'maintenance')
       
       const report = economySystem.generateMonthlyReport()
       

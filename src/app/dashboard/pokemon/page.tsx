@@ -293,14 +293,47 @@ export default function PokemonPage() {
     }
   }
   
-  const handlePokemonCare = (type: string, cost: number) => {
-    addNotification({
-      type: 'success',
-      message: `ポケモンの${type}を行いました！（費用: ₽${cost.toLocaleString()}）`
-    })
-    
-    // TODO: 実際のケア処理を実装
-    console.log('ポケモンケア:', { type, cost })
+  const handlePokemonCare = async (type: string, originalCost: number) => {
+    try {
+      const { gameController } = await import('@/lib/game-logic')
+      let result
+      
+      switch (type) {
+        case '全体回復':
+          result = await gameController.healAllPokemon('full')
+          break
+        case '基本回復':
+          result = await gameController.healPokemon('sample-pokemon', 'basic')
+          break
+        case 'なつき度向上':
+          result = await gameController.increasePokemonFriendship('sample-pokemon', 'basic')
+          break
+        case '特訓コース':
+          result = await gameController.trainPokemon('sample-pokemon', 'basic')
+          break
+        default:
+          result = { success: false, message: '不明なケアタイプです' }
+      }
+      
+      if (result.success) {
+        const cost = (result as any).cost || (result as any).totalCost
+        addNotification({
+          type: 'success',
+          message: `${result.message}${cost ? `（費用: ₽${cost.toLocaleString()}）` : ''}`
+        })
+      } else {
+        addNotification({
+          type: 'error',
+          message: result.message
+        })
+      }
+    } catch (error) {
+      console.error('ポケモンケアエラー:', error)
+      addNotification({
+        type: 'error',
+        message: 'ケア処理中にエラーが発生しました'
+      })
+    }
   }
 
   return (
