@@ -1,3 +1,17 @@
+import { 
+  PokemonIVs, 
+  ExpeditionAdvice, 
+  InterventionOpportunity, 
+  InterventionResponses, 
+  ExpeditionResultSummary,
+  LocationUnlockRequirements,
+  PredictedOutcomes,
+  OptimizationSuggestions,
+  InterventionRewards,
+  BackupGameData,
+  FacilityEffects
+} from './game-data'
+
 export interface Database {
   public: {
     Tables: {
@@ -195,7 +209,7 @@ export interface Database {
           types: string[]
           nature: string | null
           is_shiny: boolean
-          ivs: Record<string, any>
+          ivs: PokemonIVs
           status: string
           friendship: number
           moves: string[]
@@ -217,7 +231,7 @@ export interface Database {
           types: string[]
           nature?: string | null
           is_shiny?: boolean
-          ivs?: Record<string, any>
+          ivs?: PokemonIVs
           status?: string
           friendship?: number
           moves?: string[]
@@ -239,7 +253,7 @@ export interface Database {
           types?: string[]
           nature?: string | null
           is_shiny?: boolean
-          ivs?: Record<string, any>
+          ivs?: PokemonIVs
           status?: string
           friendship?: number
           moves?: string[]
@@ -254,15 +268,15 @@ export interface Database {
           location_id: number
           expedition_mode: string
           target_duration_hours: number
-          advice_given: Record<string, any>
+          advice_given: ExpeditionAdvice
           status: string
           started_at: string | null
           expected_return: string | null
           actual_return: string | null
           current_progress: number
-          intervention_opportunities: any[]
-          intervention_responses: Record<string, any>
-          result_summary: Record<string, any>
+          intervention_opportunities: InterventionOpportunity[]
+          intervention_responses: InterventionResponses
+          result_summary: ExpeditionResultSummary | null
           success_rate: number | null
           created_at: string
           updated_at: string
@@ -274,15 +288,15 @@ export interface Database {
           location_id: number
           expedition_mode?: string
           target_duration_hours: number
-          advice_given?: Record<string, any>
+          advice_given?: ExpeditionAdvice
           status?: string
           started_at?: string | null
           expected_return?: string | null
           actual_return?: string | null
           current_progress?: number
-          intervention_opportunities?: any[]
-          intervention_responses?: Record<string, any>
-          result_summary?: Record<string, any>
+          intervention_opportunities?: InterventionOpportunity[]
+          intervention_responses?: InterventionResponses
+          result_summary?: ExpeditionResultSummary | null
           success_rate?: number | null
           created_at?: string
           updated_at?: string
@@ -294,15 +308,15 @@ export interface Database {
           location_id?: number
           expedition_mode?: string
           target_duration_hours?: number
-          advice_given?: Record<string, any>
+          advice_given?: ExpeditionAdvice
           status?: string
           started_at?: string | null
           expected_return?: string | null
           actual_return?: string | null
           current_progress?: number
-          intervention_opportunities?: any[]
-          intervention_responses?: Record<string, any>
-          result_summary?: Record<string, any>
+          intervention_opportunities?: InterventionOpportunity[]
+          intervention_responses?: InterventionResponses
+          result_summary?: ExpeditionResultSummary | null
           success_rate?: number | null
           updated_at?: string
         }
@@ -323,7 +337,7 @@ export interface Database {
           encounter_rates: Record<string, number>
           background_image: string | null
           map_icon: string | null
-          unlock_requirements: Record<string, any>
+          unlock_requirements: LocationUnlockRequirements
           is_unlocked_by_default: boolean
           created_at: string
         }
@@ -342,7 +356,7 @@ export interface Database {
           encounter_rates?: Record<string, number>
           background_image?: string | null
           map_icon?: string | null
-          unlock_requirements?: Record<string, any>
+          unlock_requirements?: LocationUnlockRequirements
           is_unlocked_by_default?: boolean
           created_at?: string
         }
@@ -361,7 +375,7 @@ export interface Database {
           encounter_rates?: Record<string, number>
           background_image?: string | null
           map_icon?: string | null
-          unlock_requirements?: Record<string, any>
+          unlock_requirements?: LocationUnlockRequirements
           is_unlocked_by_default?: boolean
         }
       }
@@ -373,7 +387,7 @@ export interface Database {
           level: number
           max_level: number
           upgrade_cost: number
-          effects: Record<string, number>
+          effects: FacilityEffects
           maintenance_cost: number
           construction_cost: number
           sprite_path: string | null
@@ -390,7 +404,7 @@ export interface Database {
           level?: number
           max_level?: number
           upgrade_cost: number
-          effects?: Record<string, number>
+          effects?: FacilityEffects
           maintenance_cost?: number
           construction_cost: number
           sprite_path?: string | null
@@ -407,7 +421,7 @@ export interface Database {
           level?: number
           max_level?: number
           upgrade_cost?: number
-          effects?: Record<string, number>
+          effects?: FacilityEffects
           maintenance_cost?: number
           construction_cost?: number
           sprite_path?: string | null
@@ -566,8 +580,8 @@ export interface Database {
           efficiency_score: number
           profit_score: number
           recommendations: string[]
-          predicted_outcomes: Record<string, any>
-          optimization_suggestions: Record<string, any>
+          predicted_outcomes: PredictedOutcomes
+          optimization_suggestions: OptimizationSuggestions
           created_at: string
         }
         Insert: {
@@ -578,8 +592,8 @@ export interface Database {
           efficiency_score: number
           profit_score: number
           recommendations?: string[]
-          predicted_outcomes?: Record<string, any>
-          optimization_suggestions?: Record<string, any>
+          predicted_outcomes?: PredictedOutcomes
+          optimization_suggestions?: OptimizationSuggestions
           created_at?: string
         }
         Update: {
@@ -590,8 +604,8 @@ export interface Database {
           efficiency_score?: number
           profit_score?: number
           recommendations?: string[]
-          predicted_outcomes?: Record<string, any>
-          optimization_suggestions?: Record<string, any>
+          predicted_outcomes?: PredictedOutcomes
+          optimization_suggestions?: OptimizationSuggestions
         }
       }
       interventions: {
@@ -602,7 +616,7 @@ export interface Database {
           event_type: string
           decision: string
           outcome: string
-          rewards: Record<string, any>
+          rewards: InterventionRewards
           resolved_at: string
         }
         Insert: {
@@ -612,7 +626,7 @@ export interface Database {
           event_type: string
           decision: string
           outcome: string
-          rewards?: Record<string, any>
+          rewards?: InterventionRewards
           resolved_at?: string
         }
         Update: {
@@ -622,7 +636,7 @@ export interface Database {
           event_type?: string
           decision?: string
           outcome?: string
-          rewards?: Record<string, any>
+          rewards?: InterventionRewards
           resolved_at?: string
         }
       }
@@ -630,19 +644,19 @@ export interface Database {
         Row: {
           id: string
           user_id: string
-          backup_data: Record<string, any>
+          backup_data: BackupGameData
           created_at: string
         }
         Insert: {
           id?: string
           user_id: string
-          backup_data: Record<string, any>
+          backup_data: BackupGameData
           created_at?: string
         }
         Update: {
           id?: string
           user_id?: string
-          backup_data?: Record<string, any>
+          backup_data?: BackupGameData
         }
       }
     }

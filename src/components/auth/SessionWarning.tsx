@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
+import { UI } from '@/config/app'
 import { authSessionManager } from '@/lib/auth-integration'
 import { useAuth } from '@/contexts/GameContext'
 
@@ -130,7 +131,7 @@ export function SessionWarningManager() {
     checkSessionWarning()
 
     // 定期的にチェック
-    const interval = setInterval(checkSessionWarning, 30000) // 30秒ごと
+    const interval = setInterval(checkSessionWarning, UI.SESSION_CHECK_INTERVAL)
 
     return () => clearInterval(interval)
   }, [])

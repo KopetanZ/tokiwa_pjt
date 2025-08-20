@@ -33,10 +33,10 @@ interface SimplePokemon {
   nextLevelExp: number
 }
 
-// サンプルポケモンデータ
+// サンプルポケモンデータ（モックIDと整合性を保つ）
 const samplePokemon: SimplePokemon[] = [
   {
-    id: '1',
+    id: 'mock-pokemon-1',
     dexNumber: 25,
     name: 'ピカチュウ',
     nameEn: 'pikachu',
@@ -57,7 +57,7 @@ const samplePokemon: SimplePokemon[] = [
     nextLevelExp: 1728
   },
   {
-    id: '2', 
+    id: 'mock-pokemon-2', 
     dexNumber: 1,
     name: 'フシギダネ',
     nameEn: 'bulbasaur',
@@ -71,14 +71,14 @@ const samplePokemon: SimplePokemon[] = [
     nature: 'おだやか',
     ability: 'しんりょく',
     status: 'on_expedition',
-    trainerId: '1',
+    trainerId: 'mock-trainer-1',
     friendship: 70,
     moves: ['はっぱカッター', 'たいあたり', 'なきごえ', 'やどりぎのタネ'],
     experience: 512,
     nextLevelExp: 729
   },
   {
-    id: '3',
+    id: 'mock-pokemon-3',
     dexNumber: 4,
     name: 'ヒトカゲ',
     nameEn: 'charmander',
@@ -99,7 +99,7 @@ const samplePokemon: SimplePokemon[] = [
     nextLevelExp: 343
   },
   {
-    id: '4',
+    id: 'mock-pokemon-4',
     dexNumber: 7,
     name: 'ゼニガメ',
     nameEn: 'squirtle',

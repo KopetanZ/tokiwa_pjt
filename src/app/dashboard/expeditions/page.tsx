@@ -11,11 +11,11 @@ import { getSafeGameData } from '@/lib/data-utils'
 import { gameController, EXPEDITION_LOCATIONS } from '@/lib/game-logic'
 import { useState, useEffect } from 'react'
 
-// サンプルデータ
+// サンプルデータ（モックIDと整合性を保つ）
 const sampleActiveExpeditions = [
   {
-    id: '1',
-    trainer: { id: '2', name: 'カスミ', job: 'バトラー' },
+    id: 'mock-expedition-1',
+    trainer: { id: 'mock-trainer-2', name: 'カスミ', job: 'バトラー' },
     location: { 
       id: 1, 
       nameJa: 'トキワの森', 
@@ -31,8 +31,8 @@ const sampleActiveExpeditions = [
     startedAt: '2024-01-15T14:30:00'
   },
   {
-    id: '2',
-    trainer: { id: '1', name: 'タケシ', job: 'レンジャー' },
+    id: 'mock-expedition-2',
+    trainer: { id: 'mock-trainer-1', name: 'タケシ', job: 'レンジャー' },
     location: { 
       id: 2, 
       nameJa: '22番道路', 
@@ -136,23 +136,40 @@ export default function ExpeditionsPage() {
   }
   
   const handleStartExpedition = async (locationId: number | string) => {
+    console.log('🚀 派遣処理開始:', { locationId, isMockMode, availableTrainersCount: availableTrainers.length })
+    
     setIsLoading(true)
     
     try {
       if (isMockMode) {
+        // 利用可能なトレーナーをチェック
+        if (!availableTrainers.length) {
+          addNotification({
+            type: 'error',
+            message: '利用可能なトレーナーがいません'
+          })
+          return
+        }
+        
+        // 最初の利用可能なトレーナーを選択
+        const selectedTrainer = availableTrainers[0]
+        console.log('📋 選択されたトレーナー:', selectedTrainer)
+        
         // ゲームロジックを使用した実際の派遣実行（モックモード）
         const locationIdStr = typeof locationId === 'number' ? locationId.toString() : locationId
         const result = await gameController.executeExpedition({
-          trainerId: 'mock_trainer_1',
+          trainerId: selectedTrainer.id,
           locationId: locationIdStr,
           durationHours: 2,
           strategy: 'balanced',
           playerAdvice: []
         })
         
+        console.log('📊 派遣結果:', result)
+        
         addNotification({
           type: 'success',
-          message: `派遣完了！₽${result.economicImpact.moneyGained.toLocaleString()}を獲得${result.pokemonCaught.length > 0 ? ` & ポケモン${result.pokemonCaught.length}体捕獲` : ''}`
+          message: `${selectedTrainer.name}の派遣完了！₽${result.economicImpact.moneyGained.toLocaleString()}を獲得${result.pokemonCaught.length > 0 ? ` & ポケモン${result.pokemonCaught.length}体捕獲` : ''}`
         })
         
         // 捕獲したポケモンの詳細を表示
@@ -165,7 +182,8 @@ export default function ExpeditionsPage() {
           }
         }
         
-        console.log('ゲームロジック派遣結果:', result)
+        // 画面更新のためのリロード
+        window.location.reload()
         return
       }
       

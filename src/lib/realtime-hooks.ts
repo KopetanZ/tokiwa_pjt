@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from './supabase'
 import { useEffect, useState } from 'react'
+import { DEVELOPMENT } from '@/config/app'
 
 // 共通のnullチェック関数
 function ensureSupabase() {
@@ -110,7 +111,7 @@ export function useRealtimeData<T>(
     }
 
     // 開発環境では接続を遅延
-    const delay = isDevelopment ? 3000 : 500
+    const delay = DEVELOPMENT.REALTIME_DELAY
     const connectionTimeout = setTimeout(() => {
       const subscription = connectRealtime()
       

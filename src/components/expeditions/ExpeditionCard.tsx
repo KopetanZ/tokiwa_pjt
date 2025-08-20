@@ -5,6 +5,7 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { clsx } from 'clsx'
 import { useState, useEffect } from 'react'
+import { UI } from '@/config/app'
 
 interface ExpeditionEvent {
   id: string
@@ -153,7 +154,7 @@ export function ExpeditionCard({
 
         return newProgress
       })
-    }, 30000) // 30秒ごとに進行
+    }, UI.PROGRESS_UPDATE_INTERVAL)
 
     return () => clearInterval(progressTimer)
   }, [expedition.status, currentEvents.length])
@@ -208,7 +209,7 @@ export function ExpeditionCard({
     // イベントを数秒後に削除
     setTimeout(() => {
       setCurrentEvents(prev => prev.filter(e => e.id !== eventId))
-    }, 3000)
+    }, UI.INTERVENTION_TIMEOUT)
   }
 
   const getModeLabel = (mode: string) => {

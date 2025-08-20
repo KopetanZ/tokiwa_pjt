@@ -201,8 +201,8 @@ function PokedexEntryCard({ entry }: { entry: PokedexEntry }) {
 }
 
 export default function PokedexPage() {
-  const [selectedId, setSelectedId] = useState<number>(1)
-  const [searchId, setSearchId] = useState<string>('1')
+  const [selectedId, setSelectedId] = useState<number>(25) // ピカチュウ（人気ポケモン）をデフォルト
+  const [searchId, setSearchId] = useState<string>('25')
   
   const { data: entry, isLoading, error } = useQuery({
     queryKey: ['pokedex', selectedId],

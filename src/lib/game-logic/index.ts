@@ -83,6 +83,17 @@ export class GameController {
       console.error('ユーザー初期化エラー:', error)
     }
   }
+
+  /**
+   * ユーザー初期化を確実に実行
+   * 外部から呼び出し可能な公開メソッド
+   */
+  async ensureUserInitialized(): Promise<boolean> {
+    if (!this.userId) {
+      await this.initializeUser()
+    }
+    return this.userId !== null
+  }
   
   /**
    * 派遣実行（統合版）
@@ -108,6 +119,11 @@ export class GameController {
     const soundsPlayed: string[] = []
     
     try {
+      // ユーザー初期化を確認
+      const isUserInitialized = await this.ensureUserInitialized()
+      if (!isUserInitialized) {
+        console.warn('ユーザー初期化ができませんでした - モックモードで続行')
+      }
       // 1. 派遣開始音再生
       playExpeditionStartSound()
       soundsPlayed.push('expedition_start')
@@ -356,6 +372,11 @@ export class GameController {
     cost?: number
   }> {
     try {
+      // ユーザー初期化を確認
+      const isUserInitialized = await this.ensureUserInitialized()
+      if (!isUserInitialized) {
+        console.warn('ユーザー初期化ができませんでした - モックモードで続行')
+      }
       const trainerJob = job as any // TrainerJob型変換
       const { trainer, hireCost } = TrainerSystem.hireNewTrainer(name, trainerJob, level)
       

@@ -306,7 +306,7 @@ describe('統合テスト: ゲームシステム全体', () => {
     })
 
     test('レベルアップ処理', () => {
-      const trainer = trainerSystem.generateTrainer('explorer', 1)
+      const trainer = trainerSystem.generateTrainer('ranger', 1)
       const initialLevel = trainer.level
       const initialSkills = { ...trainer.skills }
       

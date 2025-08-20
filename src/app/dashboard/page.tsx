@@ -8,6 +8,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { formatMoney } from '@/lib/utils'
 import { getSafeGameData, calculateGameStats } from '@/lib/data-utils'
+import { UI } from '@/config/app'
 import { saveEmergencyEventResult, processEmergencyEvent, processMockEmergencyEvent } from '@/lib/emergency-events'
 import { gameController } from '@/lib/game-logic'
 
@@ -54,7 +55,7 @@ export default function DashboardPage() {
     loadGameStats()
     
     // 30秒ごとに更新
-    const interval = setInterval(loadGameStats, 30000)
+    const interval = setInterval(loadGameStats, UI.REFRESH_INTERVAL)
     return () => clearInterval(interval)
   }, [])
 
@@ -163,7 +164,7 @@ export default function DashboardPage() {
       if (!showEmergency) {
         generateEmergencyEvent()
       }
-    }, 30000)
+    }, UI.REFRESH_INTERVAL)
 
     return () => {
       clearInterval(eventGenerator)

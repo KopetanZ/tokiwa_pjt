@@ -15,12 +15,14 @@
       "Bash(npm run lint)",
       "Bash(git add:*)",
       "Bash(git rm:*)",
-      "Bash(npm test:*)"
+      "Bash(npm test:*)",
+      "Bash(npx tsc:*)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
-      "E:\\mnt\\e\\study"
+      "E:\\mnt\\e\\study",
+      "E:\\e\\study"
     ]
   }
 }

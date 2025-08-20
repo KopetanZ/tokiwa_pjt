@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useState } from 'react'
+import { API, DEVELOPMENT } from '@/config/app'
 
 // React Query設定
 const createQueryClient = () => {
@@ -27,7 +28,7 @@ const createQueryClient = () => {
           return failureCount < 1
         },
         // リトライの遅延
-        retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+        retryDelay: (attemptIndex) => Math.min(API.RETRY_DELAY_BASE * 2 ** attemptIndex, API.RETRY_DELAY_MAX),
         // バックグラウンドでの自動再取得
         refetchOnWindowFocus: true,
         refetchOnMount: true,

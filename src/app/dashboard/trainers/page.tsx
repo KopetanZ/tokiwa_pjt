@@ -8,10 +8,10 @@ import { TrainerSummary } from '@/types/trainer'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState, useEffect } from 'react'
 
-// サンプルデータ
+// サンプルデータ（モックIDと整合性を保つ）
 const sampleTrainers: TrainerSummary[] = [
   {
-    id: '1',
+    id: 'mock-trainer-1',
     name: 'タケシ',
     job: {
       id: 1,
@@ -33,7 +33,7 @@ const sampleTrainers: TrainerSummary[] = [
     spritePath: '/sprites/trainers/ranger_m.png'
   },
   {
-    id: '2', 
+    id: 'mock-trainer-2', 
     name: 'カスミ',
     job: {
       id: 3,
@@ -55,7 +55,7 @@ const sampleTrainers: TrainerSummary[] = [
     spritePath: '/sprites/trainers/battler_f.png'
   },
   {
-    id: '3',
+    id: 'mock-trainer-3',
     name: 'マチス',
     job: {
       id: 2,
@@ -143,10 +143,16 @@ export default function TrainersPage() {
   }
   
   const handleHireTrainer = async (trainerName: string, job: string, cost: number) => {
+    console.log('🎯 雇用処理開始:', { trainerName, job, cost })
+    
     try {
       // gameControllerを使用して実際の雇用処理
       const { gameController } = await import('@/lib/game-logic')
+      
+      console.log('📋 gameController取得完了、雇用処理実行中...')
       const result = await gameController.hireTrainer(trainerName, job, 1)
+      
+      console.log('📊 雇用処理結果:', result)
       
       if (result.success) {
         addNotification({
@@ -157,13 +163,14 @@ export default function TrainersPage() {
         // 画面更新のためのトレーナーリスト再読み込み
         window.location.reload() // 簡易的な更新
       } else {
+        console.warn('❌ 雇用失敗:', result.message)
         addNotification({
           type: 'error',
           message: result.message
         })
       }
     } catch (error) {
-      console.error('雇用処理エラー:', error)
+      console.error('🚨 雇用処理エラー:', error)
       addNotification({
         type: 'error',
         message: '雇用処理中にエラーが発生しました'

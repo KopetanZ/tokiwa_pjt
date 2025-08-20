@@ -7,6 +7,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { useRouter } from 'next/navigation'
 import { SettingsManager, UserSettings, DEFAULT_SETTINGS } from '@/lib/settings-integration'
 import { getSafeGameData } from '@/lib/data-utils'
+import { UI } from '@/config/app'
 
 export default function SettingsPage() {
   const { user, isMockMode, signOut, isAuthenticated } = useAuth()
@@ -352,7 +353,7 @@ export default function SettingsPage() {
         // ホームページにリダイレクト
         setTimeout(() => {
           window.location.href = '/'
-        }, 3000)
+        }, UI.NOTIFICATION_DURATION)
         
         console.log('ゲームデータリセット完了')
         

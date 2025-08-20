@@ -36,7 +36,7 @@ export default function EconomyPage() {
   
   const budget: BudgetCategory[] = [
     {
-      id: '1',
+      id: 'budget-personnel',
       name: '人件費',
       allocated: 15000,
       spent: 12000,
@@ -45,7 +45,7 @@ export default function EconomyPage() {
       isOverBudget: false
     },
     {
-      id: '2', 
+      id: 'budget-facilities', 
       name: '施設維持費',
       allocated: 5000,
       spent: 3500,
@@ -54,7 +54,7 @@ export default function EconomyPage() {
       isOverBudget: false
     },
     {
-      id: '3',
+      id: 'budget-pokemon-care',
       name: 'ポケモンケア',
       allocated: 3000,
       spent: 2800,

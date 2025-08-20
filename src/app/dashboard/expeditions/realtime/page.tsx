@@ -10,16 +10,16 @@ import { getUserExpeditions, synchronizeRealtimeWithDatabase } from '@/lib/exped
 import { useAuth } from '@/contexts/GameContext'
 import { useState, useEffect } from 'react'
 
-// デモ用サンプルデータ
+// デモ用サンプルデータ（モックIDと整合性を保つ）
 const sampleExpeditions = [
   {
-    id: 'exp_1',
-    trainer: { id: '1', name: 'タケシ', job: 'レンジャー' },
+    id: 'mock-expedition-1',
+    trainer: { id: 'mock-trainer-1', name: 'タケシ', job: 'レンジャー' },
     location: { nameJa: 'トキワの森' }
   },
   {
-    id: 'exp_2', 
-    trainer: { id: '2', name: 'カスミ', job: 'バトラー' },
+    id: 'mock-expedition-2', 
+    trainer: { id: 'mock-trainer-2', name: 'カスミ', job: 'バトラー' },
     location: { nameJa: '22番道路' }
   }
 ]
