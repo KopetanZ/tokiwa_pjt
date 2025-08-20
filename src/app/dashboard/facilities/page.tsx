@@ -5,98 +5,137 @@ import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { facilitySystem, Facility, FacilityUpgrade, ResearchProject } from '@/lib/facilities'
+import { facilitySystem, Facility as FacilityType, UpgradeProject } from '@/lib/game-logic/facility-system'
 import { formatMoney } from '@/lib/utils'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { clsx } from 'clsx'
 
 export default function FacilitiesPage() {
-  const [selectedTab, setSelectedTab] = useState<'facilities' | 'upgrades' | 'research' | 'overview'>('overview')
+  const [selectedTab, setSelectedTab] = useState<'facilities' | 'upgrades' | 'overview' | 'research'>('overview')
+  const [loading, setLoading] = useState(true)
   
   const { isMockMode } = useAuth()
   const gameData = useGameData()
   const { addNotification } = useNotifications()
-  
-  // 実際のゲームデータまたはサンプルデータを使用
-  const facilities = isMockMode ? gameData.facilities.map(f => ({
-    ...f,
-    nameJa: f.name,
-    currentUsage: Math.floor(f.capacity * 0.6), // 使用率60%として表示
-    effects: {
-      trainerEfficiency: f.efficiency,
-      pokemonRecovery: 1.0,
-      researchSpeed: 1.0,
-      storageCapacity: 1.0
-    },
-    upgradeRequirements: {
-      cost: (f.level + 1) * 10000,
-      time: (f.level + 1) * 60,
-      materials: ['建設資材', '改良パーツ'],
-      prerequisite: []
-    },
-    maxLevel: 10,
-    description: `${f.name}の詳細説明がここに表示されます。`
-  })) : facilitySystem.getFacilities()
-  
-  const upgrades: FacilityUpgrade[] = []
-  const researchProjects: ResearchProject[] = []
-  const totalMaintenanceCost = facilities.reduce((sum, f) => sum + (f.maintenance_cost || 0), 0)
 
-  const handleUpgrade = (facilityId: string) => {
-    addNotification({
-      type: 'success',
-      message: '施設のアップグレードを開始しました！'
-    })
-    console.log('アップグレード開始:', { facilityId })
+  // 新しい施設システムを使用
+  const [facilities, setFacilities] = useState<FacilityType[]>([])
+  const [upgradeProjects, setUpgradeProjects] = useState<UpgradeProject[]>([])
+  const [researchProjects, setResearchProjects] = useState<any[]>([])
+  const [facilityStatus, setFacilityStatus] = useState({
+    total: 0,
+    active: 0,
+    upgrading: 0,
+    averageLevel: 0,
+    averageCondition: 0,
+    monthlyMaintenanceCost: 0
+  })
+
+  useEffect(() => {
+    loadFacilityData()
+    const interval = setInterval(loadFacilityData, 5000) // 5秒毎に更新
+    return () => clearInterval(interval)
+  }, [])
+
+  const loadFacilityData = async () => {
+    try {
+      const allFacilities = facilitySystem.getAllFacilities()
+      const activeProjects = facilitySystem.getActiveProjects()
+      const status = facilitySystem.getFacilityStatus()
+
+      setFacilities(allFacilities)
+      setUpgradeProjects(activeProjects)
+      setFacilityStatus(status)
+    } catch (error) {
+      console.error('施設データの読み込みに失敗:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleStartResearch = (projectId: string) => {
-    addNotification({
-      type: 'info', 
-      message: '研究プロジェクトを開始しました！'
-    })
-    console.log('研究開始:', { projectId })
+  const handleUpgrade = async (facilityId: string) => {
+    try {
+      const result = await facilitySystem.startUpgrade(facilityId)
+      if (result.success) {
+        addNotification({
+          type: 'success',
+          message: result.message
+        })
+        loadFacilityData() // データ更新
+      } else {
+        addNotification({
+          type: 'error',
+          message: result.message
+        })
+      }
+    } catch (error) {
+      addNotification({
+        type: 'error',
+        message: 'アップグレードに失敗しました'
+      })
+    }
   }
 
-  const getFacilityTypeIcon = (type: string) => {
+  const handleUnlockFacility = (facilityId: string) => {
+    const success = facilitySystem.unlockFacility(facilityId)
+    if (success) {
+      addNotification({
+        type: 'success',
+        message: '新しい施設がロック解除されました！'
+      })
+      loadFacilityData()
+    } else {
+      addNotification({
+        type: 'error',
+        message: 'ロック解除の条件を満たしていません'
+      })
+    }
+  }
+
+  const handleCompleteUpgradeInstantly = async (projectId: string) => {
+    const success = await facilitySystem.completeUpgradeInstantly(projectId)
+    if (success) {
+      addNotification({
+        type: 'success',
+        message: 'アップグレードが完了しました！'
+      })
+      loadFacilityData()
+    }
+  }
+
+  const getFacilityTypeIcon = (category: string) => {
     const icons = {
       training: '🏋️',
       research: '🔬',
       medical: '🏥',
       storage: '📦',
-      utility: '🏠',
-      expansion: '🏗️'
+      accommodation: '🏠',
+      security: '🛡️',
+      utility: '⚙️'
     }
-    return icons[type as keyof typeof icons] || '🏢'
+    return icons[category as keyof typeof icons] || '🏢'
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'text-green-600'
-      case 'upgrading': return 'text-orange-600'
-      case 'maintenance': return 'text-yellow-600'
-      case 'inactive': return 'text-gray-600'
-      default: return 'text-retro-gb-dark'
-    }
+  const getStatusText = (facility: FacilityType) => {
+    if (!facility.isUnlocked) return { text: 'ロック中', color: 'text-gray-600' }
+    if (!facility.isActive) return { text: '未建設', color: 'text-red-600' }
+    if (facility.level === 0) return { text: '建設中', color: 'text-yellow-600' }
+    return { text: '稼働中', color: 'text-green-600' }
   }
 
-  const getResearchStatusColor = (status: string) => {
-    switch (status) {
-      case 'available': return 'text-green-600'
-      case 'researching': return 'text-blue-600'
-      case 'completed': return 'text-purple-600'
-      case 'locked': return 'text-gray-600'
-      default: return 'text-retro-gb-dark'
-    }
+  const formatEffectValue = (value: number, type: string) => {
+    const sign = value > 0 ? '+' : ''
+    const suffix = type.includes('rate') || type.includes('bonus') ? '%' : ''
+    return `${sign}${value}${suffix}`
   }
 
-  // 統計計算
-  const activeFacilities = facilities.filter(f => f.status === 'active').length
-  const totalCapacity = facilities.reduce((sum, f) => sum + f.capacity, 0)
-  const totalUsage = facilities.reduce((sum, f) => sum + f.currentUsage, 0)
-  const averageEfficiency = facilities.length > 0 
-    ? (facilities.reduce((sum, f) => sum + f.efficiency, 0) / facilities.length)
-    : 1.0
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -116,38 +155,43 @@ export default function FacilitiesPage() {
       </div>
 
       {/* 統計概要 */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <PixelCard title="稼働施設">
           <div className="text-center">
-            <div className="font-pixel-large text-green-600">{activeFacilities}</div>
-            <div className="font-pixel text-xs text-retro-gb-mid">/ {facilities.length} 施設</div>
+            <div className="font-pixel-large text-green-600">{facilityStatus.active}</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">/ {facilityStatus.total} 施設</div>
           </div>
         </PixelCard>
 
-        <PixelCard title="設備使用率">
+        <PixelCard title="アップグレード中">
           <div className="text-center">
-            <div className="font-pixel-large text-retro-gb-dark">
-              {totalCapacity > 0 ? Math.round((totalUsage / totalCapacity) * 100) : 0}%
-            </div>
-            <div className="font-pixel text-xs text-retro-gb-mid">
-              {totalUsage} / {totalCapacity}
-            </div>
+            <div className="font-pixel-large text-orange-600">{facilityStatus.upgrading}</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">プロジェクト</div>
           </div>
         </PixelCard>
 
-        <PixelCard title="平均効率">
+        <PixelCard title="平均レベル">
           <div className="text-center">
             <div className="font-pixel-large text-blue-600">
-              {averageEfficiency.toFixed(1)}x
+              {facilityStatus.averageLevel}
             </div>
-            <div className="font-pixel text-xs text-retro-gb-mid">効率倍率</div>
+            <div className="font-pixel text-xs text-retro-gb-mid">全施設平均</div>
+          </div>
+        </PixelCard>
+
+        <PixelCard title="平均コンディション">
+          <div className="text-center">
+            <div className="font-pixel-large text-purple-600">
+              {facilityStatus.averageCondition}%
+            </div>
+            <div className="font-pixel text-xs text-retro-gb-mid">メンテナンス状況</div>
           </div>
         </PixelCard>
 
         <PixelCard title="月次維持費">
           <div className="text-center">
             <div className="font-pixel-large text-red-600">
-              {formatMoney(totalMaintenanceCost)}
+              ¥{facilityStatus.monthlyMaintenanceCost.toLocaleString()}
             </div>
             <div className="font-pixel text-xs text-retro-gb-mid">毎月支払い</div>
           </div>
@@ -160,8 +204,7 @@ export default function FacilitiesPage() {
           {[
             { key: 'overview', label: '概要' },
             { key: 'facilities', label: '施設一覧' },
-            { key: 'upgrades', label: 'アップグレード' },
-            { key: 'research', label: '研究開発' }
+            { key: 'upgrades', label: 'アップグレード' }
           ].map(tab => (
             <PixelButton
               key={tab.key}
@@ -179,32 +222,40 @@ export default function FacilitiesPage() {
       {selectedTab === 'overview' && (
         <div className="space-y-6">
           {/* アクティブアップグレード */}
-          {upgrades.length > 0 && (
+          {upgradeProjects.length > 0 && (
             <PixelCard title="進行中のアップグレード">
               <div className="space-y-3">
-                {upgrades.map(upgrade => {
-                  const facility = facilities.find(f => f.id === upgrade.facilityId)
-                  const progress = Math.min(100, 
-                    ((Date.now() - upgrade.startTime.getTime()) / 
-                     (upgrade.endTime.getTime() - upgrade.startTime.getTime())) * 100
-                  )
-                  const timeRemaining = Math.max(0, upgrade.endTime.getTime() - Date.now())
+                {upgradeProjects.map(project => {
+                  const facility = facilities.find(f => f.id === project.facilityId)
+                  const startTime = new Date(project.startTime).getTime()
+                  const endTime = new Date(project.completionTime).getTime()
+                  const now = Date.now()
+                  const progress = Math.min(100, ((now - startTime) / (endTime - startTime)) * 100)
+                  const timeRemaining = Math.max(0, endTime - now)
                   const hoursRemaining = Math.floor(timeRemaining / (60 * 60 * 1000))
                   const minutesRemaining = Math.floor((timeRemaining % (60 * 60 * 1000)) / (60 * 1000))
 
                   return (
-                    <div key={upgrade.facilityId} className="border border-retro-gb-mid p-3">
+                    <div key={project.id} className="border border-retro-gb-mid p-3">
                       <div className="flex justify-between items-start mb-2">
                         <div>
                           <div className="font-pixel text-sm text-retro-gb-dark">
-                            {facility?.nameJa} Lv.{facility?.level} → {upgrade.targetLevel}
+                            {facility?.name} Lv.{facility?.level} → {project.newLevel}
                           </div>
                           <div className="font-pixel text-xs text-retro-gb-mid">
                             残り時間: {hoursRemaining}時間{minutesRemaining}分
                           </div>
                         </div>
-                        <div className="font-pixel text-xs text-retro-gb-dark">
-                          {progress.toFixed(1)}%
+                        <div className="flex items-center gap-2">
+                          <div className="font-pixel text-xs text-retro-gb-dark">
+                            {progress.toFixed(1)}%
+                          </div>
+                          <PixelButton
+                            size="sm"
+                            onClick={() => handleCompleteUpgradeInstantly(project.id)}
+                          >
+                            即座完了
+                          </PixelButton>
                         </div>
                       </div>
                       <PixelProgressBar
@@ -257,18 +308,18 @@ export default function FacilitiesPage() {
           <PixelCard title="施設効率ランキング">
             <div className="space-y-2">
               {facilities
-                .filter(f => f.status === 'active')
-                .sort((a, b) => b.efficiency - a.efficiency)
+                .filter(f => f.level > 0)
+                .sort((a, b) => b.level - a.level)
                 .slice(0, 5)
                 .map((facility, index) => (
                   <div key={facility.id} className="flex justify-between items-center py-2 border-b border-retro-gb-mid last:border-b-0">
                     <div className="flex items-center space-x-2">
                       <span className="font-pixel text-sm text-retro-gb-mid">#{index + 1}</span>
-                      <span className="text-lg">{getFacilityTypeIcon(facility.type)}</span>
-                      <span className="font-pixel text-sm text-retro-gb-dark">{facility.nameJa}</span>
+                      <span className="text-lg">{getFacilityTypeIcon(facility.category)}</span>
+                      <span className="font-pixel text-sm text-retro-gb-dark">{facility.name}</span>
                     </div>
                     <div className="text-right">
-                      <div className="font-pixel text-sm text-blue-600">{facility.efficiency.toFixed(1)}x</div>
+                      <div className="font-pixel text-sm text-blue-600">{facility.level}x</div>
                       <div className="font-pixel text-xs text-retro-gb-mid">Lv.{facility.level}</div>
                     </div>
                   </div>
@@ -287,26 +338,24 @@ export default function FacilitiesPage() {
                 {/* ヘッダー */}
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-2">
-                    <span className="text-2xl">{getFacilityTypeIcon(facility.type)}</span>
+                    <span className="text-2xl">{getFacilityTypeIcon(facility.category)}</span>
                     <div>
                       <h3 className="font-pixel text-lg text-retro-gb-dark">
-                        {facility.nameJa}
+                        {facility.name}
                       </h3>
                       <div className="flex items-center space-x-2">
                         <span className="font-pixel text-sm text-retro-gb-mid">
-                          Lv.{facility.level}/{facility.maxLevel}
+                          Lv.{facility.level}/10
                         </span>
-                        <span className={`font-pixel text-xs ${getStatusColor(facility.status)}`}>
-                          {facility.status === 'active' ? '稼働中' :
-                           facility.status === 'upgrading' ? 'アップグレード中' :
-                           facility.status === 'maintenance' ? 'メンテナンス中' : '停止中'}
+                        <span className="font-pixel text-xs text-green-600">
+                          {facility.level > 0 ? '稼働中' : '停止中'}
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
                     <div className="font-pixel text-sm text-blue-600">
-                      {facility.efficiency.toFixed(1)}x
+                      {(facility.level * 0.2 + 1).toFixed(1)}x
                     </div>
                     <div className="font-pixel text-xs text-retro-gb-mid">効率</div>
                   </div>
@@ -317,13 +366,13 @@ export default function FacilitiesPage() {
                   <div className="flex justify-between mb-1">
                     <span className="font-pixel text-xs text-retro-gb-mid">使用率</span>
                     <span className="font-pixel text-xs text-retro-gb-dark">
-                      {facility.currentUsage}/{facility.capacity}
+{Math.floor(facility.level * 20)}/{facility.level * 50}
                     </span>
                   </div>
                   <PixelProgressBar
-                    value={facility.currentUsage}
-                    max={facility.capacity}
-                    color={facility.currentUsage / facility.capacity > 0.8 ? 'hp' : 'progress'}
+                    value={Math.floor(facility.level * 20)}
+                    max={facility.level * 50}
+                    color={facility.level > 5 ? 'hp' : 'progress'}
                     showLabel={false}
                   />
                 </div>
@@ -337,26 +386,9 @@ export default function FacilitiesPage() {
                 <div>
                   <div className="font-pixel text-xs text-retro-gb-mid mb-1">効果:</div>
                   <div className="space-y-1">
-                    {facility.effects.trainerEfficiency && (
-                      <div className="font-pixel text-xs text-green-600">
-                        トレーナー効率 +{((facility.effects.trainerEfficiency - 1) * 100).toFixed(0)}%
-                      </div>
-                    )}
-                    {facility.effects.pokemonRecovery && (
-                      <div className="font-pixel text-xs text-blue-600">
-                        ポケモン回復 +{((facility.effects.pokemonRecovery - 1) * 100).toFixed(0)}%
-                      </div>
-                    )}
-                    {facility.effects.researchSpeed && (
-                      <div className="font-pixel text-xs text-purple-600">
-                        研究速度 +{((facility.effects.researchSpeed - 1) * 100).toFixed(0)}%
-                      </div>
-                    )}
-                    {facility.effects.storageCapacity && (
-                      <div className="font-pixel text-xs text-orange-600">
-                        保管容量 +{((facility.effects.storageCapacity - 1) * 100).toFixed(0)}%
-                      </div>
-                    )}
+                    <div className="font-pixel text-xs text-green-600">
+                      効率 +{(facility.level * 10)}%
+                    </div>
                   </div>
                 </div>
 
@@ -366,17 +398,17 @@ export default function FacilitiesPage() {
                     月次維持費: {formatMoney(facility.maintenanceCost)}
                   </span>
                   <div className="flex space-x-2">
-                    {facility.status === 'active' && facility.level < facility.maxLevel && (
+                    {facility.level > 0 && facility.level < 10 && (
                       <PixelButton
                         size="sm"
                         onClick={() => handleUpgrade(facility.id)}
                       >
                         アップグレード
                         <br />
-                        {formatMoney(facility.upgradeRequirements.cost)}
+                        {formatMoney(facility.upgradeCost * Math.pow(1.5, facility.level))}
                       </PixelButton>
                     )}
-                    {facility.status === 'inactive' && (
+                    {facility.level === 0 && (
                       <PixelButton size="sm" variant="secondary">
                         建設開始
                       </PixelButton>
@@ -395,16 +427,16 @@ export default function FacilitiesPage() {
           <PixelCard title="アップグレード計画">
             <div className="space-y-4">
               {facilities
-                .filter(f => f.level < f.maxLevel && f.status !== 'upgrading')
+                .filter(f => f.level < 10 && f.level > 0)
                 .map(facility => (
                   <div key={facility.id} className="border border-retro-gb-mid p-4">
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-2">
-                          <span className="text-lg">{getFacilityTypeIcon(facility.type)}</span>
+                          <span className="text-lg">{getFacilityTypeIcon(facility.category)}</span>
                           <div>
                             <div className="font-pixel text-sm text-retro-gb-dark">
-                              {facility.nameJa}
+                              {facility.name}
                             </div>
                             <div className="font-pixel text-xs text-retro-gb-mid">
                               Lv.{facility.level} → {facility.level + 1}
@@ -414,27 +446,20 @@ export default function FacilitiesPage() {
                         
                         <div className="space-y-2">
                           <div className="font-pixel text-xs text-retro-gb-mid">
-                            費用: {formatMoney(facility.upgradeRequirements.cost)}
+                            費用: {formatMoney(facility.upgradeCost * Math.pow(1.5, facility.level))}
                           </div>
                           <div className="font-pixel text-xs text-retro-gb-mid">
-                            工期: {Math.floor(facility.upgradeRequirements.time / 60)}時間
+                            工期: {Math.floor(facility.constructionTime / 60)}時間
                           </div>
-                          {facility.upgradeRequirements.materials && (
-                            <div className="font-pixel text-xs text-retro-gb-mid">
-                              材料: {facility.upgradeRequirements.materials.join(', ')}
-                            </div>
-                          )}
-                          {facility.upgradeRequirements.prerequisite && (
-                            <div className="font-pixel text-xs text-orange-600">
-                              前提: {facility.upgradeRequirements.prerequisite.join(', ')}
-                            </div>
-                          )}
+                          <div className="font-pixel text-xs text-retro-gb-mid">
+                            材料: 基本資材
+                          </div>
                         </div>
                       </div>
                       
                       <PixelButton
                         onClick={() => handleUpgrade(facility.id)}
-                        disabled={facility.status !== 'active'}
+                        disabled={false}
                       >
                         開始
                       </PixelButton>
@@ -459,10 +484,8 @@ export default function FacilitiesPage() {
                         <h3 className="font-pixel text-sm text-retro-gb-dark">
                           {project.nameJa}
                         </h3>
-                        <span className={`font-pixel text-xs ${getResearchStatusColor(project.status)}`}>
-                          {project.status === 'available' ? '研究可能' :
-                           project.status === 'researching' ? '研究中' :
-                           project.status === 'completed' ? '完了' : 'ロック中'}
+                        <span className="font-pixel text-xs text-green-600">
+                          研究可能
                         </span>
                       </div>
                       <div className="text-right">
@@ -508,7 +531,7 @@ export default function FacilitiesPage() {
                     {project.status === 'available' && (
                       <PixelButton
                         size="sm"
-                        onClick={() => handleStartResearch(project.id)}
+                        onClick={() => console.log('研究開始:', project.id)}
                         className="w-full"
                       >
                         研究開始

@@ -5,8 +5,10 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { PokemonCard } from '@/components/pokemon/PokemonCard'
+import { PokemonDetailModal } from '@/components/pokemon/PokemonDetailModal'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
-import { useState } from 'react'
+import { gameController } from '@/lib/game-logic'
+import { useState, useEffect } from 'react'
 
 // Pokemon interface for this page (simplified)
 interface SimplePokemon {
@@ -122,6 +124,9 @@ const samplePokemon: SimplePokemon[] = [
 export default function PokemonPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'assigned' | 'injured'>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedPokemon, setSelectedPokemon] = useState<any | null>(null)
+  const [party, setParty] = useState<SimplePokemon[]>([])
+  const [enhancedPokemon, setEnhancedPokemon] = useState<any[]>([])
   
   const { isMockMode } = useAuth()
   const gameData = useGameData()
@@ -170,6 +175,122 @@ export default function PokemonPage() {
     assigned: pokemon.filter(p => p.status === 'on_expedition').length,
     injured: pokemon.filter(p => p.status === 'injured').length,
     averageLevel: pokemon.length > 0 ? Math.round(pokemon.reduce((sum, p) => sum + p.level, 0) / pokemon.length) : 0
+  }
+  
+  useEffect(() => {
+    loadEnhancedPokemonData()
+  }, [pokemon])
+
+  const loadEnhancedPokemonData = async () => {
+    try {
+      const enhanced = await Promise.all(
+        pokemon.slice(0, 5).map(async (p) => {
+          try {
+            const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${p.dexNumber}`)
+            const apiData = await response.json()
+            
+            return {
+              ...p,
+              species: {
+                id: apiData.id,
+                name: apiData.name,
+                types: apiData.types.map((type: any) => type.type.name),
+                base_stats: {
+                  hp: apiData.stats[0].base_stat,
+                  attack: apiData.stats[1].base_stat,
+                  defense: apiData.stats[2].base_stat,
+                  special_attack: apiData.stats[3].base_stat,
+                  special_defense: apiData.stats[4].base_stat,
+                  speed: apiData.stats[5].base_stat
+                },
+                height: apiData.height,
+                weight: apiData.weight,
+                base_experience: apiData.base_experience
+              },
+              current_hp: p.hp,
+              max_hp: p.maxHp,
+              individual_values: {
+                hp: Math.floor(Math.random() * 31),
+                attack: Math.floor(Math.random() * 31),
+                defense: Math.floor(Math.random() * 31),
+                special_attack: Math.floor(Math.random() * 31),
+                special_defense: Math.floor(Math.random() * 31),
+                speed: Math.floor(Math.random() * 31)
+              },
+              caught_at: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString(),
+              location: ['トキワの森', '22番道路', 'おつきみ山', 'ニビジム'][Math.floor(Math.random() * 4)],
+              is_in_party: party.some(partyPoke => partyPoke.id === p.id)
+            }
+          } catch (error) {
+            console.error(`ポケモン ${p.dexNumber} のデータ取得に失敗:`, error)
+            return {
+              ...p,
+              species: null,
+              current_hp: p.hp,
+              max_hp: p.maxHp,
+              individual_values: {
+                hp: Math.floor(Math.random() * 31),
+                attack: Math.floor(Math.random() * 31),
+                defense: Math.floor(Math.random() * 31),
+                special_attack: Math.floor(Math.random() * 31),
+                special_defense: Math.floor(Math.random() * 31),
+                speed: Math.floor(Math.random() * 31)
+              },
+              caught_at: new Date().toISOString(),
+              location: 'トキワの森',
+              is_in_party: false
+            }
+          }
+        })
+      )
+      setEnhancedPokemon(enhanced)
+    } catch (error) {
+      console.error('拡張ポケモンデータの読み込みに失敗:', error)
+    }
+  }
+
+  const handleAddToParty = async (pokemon: any) => {
+    if (party.length >= 6) {
+      addNotification({
+        type: 'error',
+        message: 'パーティは最大6体までです'
+      })
+      return
+    }
+    
+    try {
+      await gameController.addPokemonToParty(pokemon.id)
+      setParty([...party, pokemon])
+      
+      addNotification({
+        type: 'success',
+        message: `${pokemon.species?.name || pokemon.name} をパーティに追加しました`
+      })
+    } catch (error) {
+      console.error('パーティ追加に失敗:', error)
+      addNotification({
+        type: 'error',
+        message: 'パーティ追加に失敗しました'
+      })
+    }
+  }
+
+  const handleRemoveFromParty = async (pokemon: any) => {
+    try {
+      await gameController.removePokemonFromParty(pokemon.id)
+      setParty(party.filter(p => p.id !== pokemon.id))
+      
+      addNotification({
+        type: 'success',
+        message: `${pokemon.species?.name || pokemon.name} をパーティから外しました`
+      })
+    } catch (error) {
+      console.error('パーティ削除に失敗:', error)
+      addNotification({
+        type: 'error',
+        message: 'パーティ削除に失敗しました'
+      })
+    }
   }
   
   const handlePokemonCare = (type: string, cost: number) => {
@@ -281,7 +402,11 @@ export default function PokemonPage() {
           <PokemonCard 
             key={pokemon.id}
             pokemon={pokemon}
-            onClick={() => {/* 詳細画面へ */}}
+            onClick={() => {
+              // 拡張データがあればそれを使用、なければ基本データを使用
+              const enhancedData = enhancedPokemon.find(ep => ep.id === pokemon.id)
+              setSelectedPokemon(enhancedData || pokemon)
+            }}
             showStatus={true}
             showTrainer={pokemon.trainerId !== null}
           />
@@ -420,6 +545,15 @@ export default function PokemonPage() {
           </div>
         </div>
       </PixelCard>
+
+      {/* ポケモン詳細モーダル */}
+      <PokemonDetailModal
+        pokemon={selectedPokemon}
+        isOpen={!!selectedPokemon}
+        onClose={() => setSelectedPokemon(null)}
+        onAddToParty={handleAddToParty}
+        onRemoveFromParty={handleRemoveFromParty}
+      />
     </div>
   )
 }

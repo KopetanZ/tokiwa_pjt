@@ -1,26 +1,62 @@
-# 🏫 トキワシティ訓練所 (Tokiwa City Training School)
+# 🎮 トキワシティ訓練所 (Tokiwa Trainer School)
 
-**「俺に働けって言われても」インスパイア × ポケモン**  
-初代ポケモン風の派遣型トレーナー育成シミュレーションゲーム
+**ポケモントレーナー管理ゲーム - 完全実装版**
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
-[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)](https://supabase.com/)
-[![Game Boy Style](https://img.shields.io/badge/Style-Game%20Boy-brightgreen)](#)
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-181818?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
-## 🎮 ゲーム概要
+---
 
-プレイヤーはトキワシティのトレーナーズスクールの館長となり、スクール所属のトレーナーに最大6体までのポケモンを持たせて自動で放浪・捕獲・修行・バトルを行わせ、得た報酬や経験でスクールを強化していく準リアルタイム介入型運営シミュレーション。
+## 📋 概要
 
-### ✨ 主な特徴
-- 🕹️ **初代ポケモンリスペクト**: Game Boy風ピクセルパーフェクトUI
-- 🤖 **自動派遣システム**: 「俺に働けって言われても」風の放置ゲーム
-- ⚡ **リアルタイム介入**: 30秒制限での戦略的判断システム
-- 💰 **高度経済管理**: AI分析・予算管理・自動レポート
-- 🔬 **施設研究システム**: 6種施設×10レベル×5研究プロジェクト
-- 🎯 **PokeAPI統合**: 実際の1010匹ポケモンデータ
-- 📊 **AI分析**: 動的バランス調整・パフォーマンス分析
-- 🏆 **完全無課金**: 全機能が無料で利用可能
+トキワシティ訓練所は、ポケモントレーナーの成長と施設管理をテーマにした本格的なシミュレーションゲームです。プレイヤーはトレーナー育成施設の運営者として、トレーナーの派遣、ポケモンの収集、経済管理、施設拡張を通じて、最高の訓練所を築き上げます。
+
+### 🎯 ゲームの特徴
+
+- **🗺️ 戦略的派遣システム**: 8つの多様な探索エリア
+- **🔥 リアルポケモン連携**: PokeAPI活用で本物のポケモンデータ
+- **💰 本格経済シミュレーション**: 詳細な収支管理と経営分析
+- **🏗️ 施設建設・管理**: 7カテゴリの専門施設でパワーアップ
+- **🎵 没入型音響システム**: Web Audio APIによる高品質サウンド
+- **📊 データ分析**: 月次レポートによる戦略的意思決定
+
+---
+
+## 🚀 クイックスタート
+
+### 必要環境
+- Node.js 18.0.0以上
+- Git
+
+### インストール
+
+```bash
+# リポジトリクローン
+git clone https://github.com/your-username/tokiwa-trainer-school.git
+cd tokiwa-trainer-school
+
+# 依存関係インストール
+npm install
+
+# 環境変数設定
+cp .env.example .env.local
+# .env.localにSupabase認証情報を記入
+
+# 開発サーバー起動
+npm run dev
+```
+
+ブラウザで `http://localhost:3000` を開いてゲーム開始！
+
+### 設定が必要な環境変数
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+```
 
 ### 🎮 実装済み全システム (14システム完全実装)
 

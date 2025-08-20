@@ -145,7 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null)
       setIsLoading(false)
     }
-  }, [gameState.isMockMode, gameState.isAuthenticated, gameState.isLoading, gameState.user])
+  }, [gameState.isMockMode, gameState.isAuthenticated, gameState.isLoading, gameState.user?.id])
 
   // 初期化完了後の状態確認
   useEffect(() => {
@@ -174,7 +174,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthMethod('local')
       setIsLoading(false)
     }
-  }, [gameState.isMockMode, user])
+  }, [gameState.isMockMode, user?.id])
+
+  // モックモードの状態を監視して認証状態を同期
+  useEffect(() => {
+    if (gameState.isMockMode && gameState.isAuthenticated && gameState.user) {
+      // GameContextでモックモードが有効で認証済みの場合
+      if (!user || user.id !== gameState.user.id) {
+        console.log('🔐 AuthProvider: GameContextのモックモード状態と同期')
+        setUser({
+          id: gameState.user.id || 'mock-user',
+          guestName: 'モックユーザー',
+          schoolName: 'モック学校',
+          currentMoney: 50000,
+          totalReputation: 0,
+          uiTheme: 'gameboy_green',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        })
+        setAuthMethod('local')
+        setIsLoading(false)
+      }
+    }
+  }, [gameState.isMockMode, gameState.isAuthenticated, gameState.user?.id, user?.id])
 
   // authMethodの変更をログ出力
   useEffect(() => {

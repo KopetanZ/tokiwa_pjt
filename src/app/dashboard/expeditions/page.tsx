@@ -8,6 +8,7 @@ import { LocationCard } from '@/components/expeditions/LocationCard'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { getUserExpeditions, startRealExpedition } from '@/lib/expedition-integration'
 import { getSafeGameData } from '@/lib/data-utils'
+import { gameController, EXPEDITION_LOCATIONS } from '@/lib/game-logic'
 import { useState, useEffect } from 'react'
 
 // サンプルデータ
@@ -48,47 +49,24 @@ const sampleActiveExpeditions = [
   }
 ]
 
-const sampleLocations = [
-  {
-    id: 1,
-    nameJa: 'トキワの森',
-    distanceLevel: 1,
-    travelCost: 500,
-    travelTimeHours: 2,
-    riskLevel: 1.0,
-    baseRewardMoney: 1000,
-    encounterTypes: ['bug', 'normal', 'flying'],
+// ゲームロジックシステムから実際の派遣先データを取得
+const getGameLocations = (trainerLevel: number = 5) => {
+  return gameController.getAvailableExpeditions(trainerLevel).map(location => ({
+    id: location.id,
+    nameJa: location.nameJa,
+    distanceLevel: location.distanceLevel,
+    travelCost: Math.floor(location.baseRewardMoney * 0.3), // 報酬の30%を旅費として計算
+    travelTimeHours: Math.max(1, location.distanceLevel),
+    riskLevel: location.dangerLevel / 5, // 1-5を0.2-1.0に正規化
+    baseRewardMoney: location.baseRewardMoney,
+    encounterTypes: location.encounterTypes,
     isUnlocked: true,
-    description: '初心者向けの安全な森。虫タイプのポケモンが多く生息。',
-    backgroundImage: '/images/locations/viridian_forest.png'
-  },
-  {
-    id: 2,
-    nameJa: '22番道路',
-    distanceLevel: 1,
-    travelCost: 300,
-    travelTimeHours: 1,
-    riskLevel: 0.8,
-    baseRewardMoney: 800,
-    encounterTypes: ['normal', 'flying'],
-    isUnlocked: true,
-    description: '短時間で探索できる道路。ノーマル・ひこうタイプが中心。',
-    backgroundImage: '/images/locations/route_22.png'
-  },
-  {
-    id: 3,
-    nameJa: 'ニビジム',
-    distanceLevel: 2,
-    travelCost: 1200,
-    travelTimeHours: 4,
-    riskLevel: 1.3,
-    baseRewardMoney: 2500,
-    encounterTypes: ['rock', 'ground'],
-    isUnlocked: false,
-    description: 'いわタイプの訓練に最適。高い報酬が期待できるが難易度も高い。',
-    backgroundImage: '/images/locations/pewter_gym.png'
-  }
-]
+    description: location.description,
+    backgroundImage: `/images/locations/${location.id}.png`
+  }))
+}
+
+const sampleLocations = getGameLocations()
 
 export default function ExpeditionsPage() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'locations' | 'history'>('active')
@@ -157,48 +135,81 @@ export default function ExpeditionsPage() {
     ).length
   }
   
-  const handleStartExpedition = async (locationId: number) => {
-    if (isMockMode) {
-      addNotification({
-        type: 'success',
-        message: `新しい派遣を開始しました！（モックモード）`
-      })
-      console.log('モック派遣開始:', { locationId })
-      return
-    }
+  const handleStartExpedition = async (locationId: number | string) => {
+    setIsLoading(true)
     
-    if (!user || !availableTrainers.length) {
-      addNotification({
-        type: 'error',
-        message: '利用可能なトレーナーがいません'
-      })
-      return
-    }
-    
-    const selectedTrainer = availableTrainers[0] // 簡単のため最初のトレーナーを選択
-    const result = await startRealExpedition(
-      user,
-      selectedTrainer.id,
-      locationId,
-      'balanced',
-      2 // 2時間の派遣
-    )
-    
-    if (result.success) {
-      addNotification({
-        type: 'success',
-        message: `${selectedTrainer.name}を派遣しました！`
-      })
-      // データを再読み込み
-      if (!isMockMode && isAuthenticated && user) {
-        const expeditionData = await getUserExpeditions(user)
-        setRealExpeditionData(expeditionData)
+    try {
+      if (isMockMode) {
+        // ゲームロジックを使用した実際の派遣実行（モックモード）
+        const locationIdStr = typeof locationId === 'number' ? locationId.toString() : locationId
+        const result = await gameController.executeExpedition({
+          trainerId: 'mock_trainer_1',
+          locationId: locationIdStr,
+          durationHours: 2,
+          strategy: 'balanced',
+          playerAdvice: []
+        })
+        
+        addNotification({
+          type: 'success',
+          message: `派遣完了！₽${result.economicImpact.moneyGained.toLocaleString()}を獲得${result.pokemonCaught.length > 0 ? ` & ポケモン${result.pokemonCaught.length}体捕獲` : ''}`
+        })
+        
+        // 捕獲したポケモンの詳細を表示
+        if (result.pokemonCaught.length > 0) {
+          for (const pokemon of result.pokemonCaught) {
+            addNotification({
+              type: 'info',
+              message: `${pokemon.species?.name_ja || 'ポケモン'}(Lv.${pokemon.level})を捕獲しました！`
+            })
+          }
+        }
+        
+        console.log('ゲームロジック派遣結果:', result)
+        return
       }
-    } else {
+      
+      if (!user || !availableTrainers.length) {
+        addNotification({
+          type: 'error',
+          message: '利用可能なトレーナーがいません'
+        })
+        return
+      }
+      
+      const selectedTrainer = availableTrainers[0] // 簡単のため最初のトレーナーを選択
+      const result = await startRealExpedition(
+        user,
+        selectedTrainer.id,
+        typeof locationId === 'string' ? parseInt(locationId) : locationId,
+        'balanced',
+        2 // 2時間の派遣
+      )
+      
+      if (result.success) {
+        addNotification({
+          type: 'success',
+          message: `${selectedTrainer.name}を派遣しました！`
+        })
+        // データを再読み込み
+        if (!isMockMode && isAuthenticated && user) {
+          const expeditionData = await getUserExpeditions(user)
+          setRealExpeditionData(expeditionData)
+        }
+      } else {
+        addNotification({
+          type: 'error',
+          message: result.error || '派遣開始に失敗しました'
+        })
+      }
+    } catch (error) {
+      console.error('派遣開始エラー:', error)
       addNotification({
         type: 'error',
-        message: result.error || '派遣開始に失敗しました'
+        message: '派遣開始中にエラーが発生しました'
       })
+    } finally {
+      setIsLoading(false)
     }
   }
   
@@ -219,8 +230,11 @@ export default function ExpeditionsPage() {
         <h1 className="font-pixel-large text-retro-gb-dark">
           派遣管理
         </h1>
-        <PixelButton>
-          新しい派遣を開始
+        <PixelButton 
+          onClick={() => setSelectedTab('locations')}
+          disabled={isLoading}
+        >
+          {isLoading ? '処理中...' : '新しい派遣を開始'}
         </PixelButton>
       </div>
 
@@ -291,6 +305,7 @@ export default function ExpeditionsPage() {
                   })
                   console.log('呼び戻し処理:', { id })
                 }}
+                disabled={isLoading}
               />
             ))
           ) : (
@@ -299,7 +314,7 @@ export default function ExpeditionsPage() {
                 <div className="font-pixel text-retro-gb-mid mb-4">
                   現在進行中の派遣はありません
                 </div>
-                <PixelButton>
+                <PixelButton onClick={() => setSelectedTab('locations')}>
                   新しい派遣を開始する
                 </PixelButton>
               </div>
@@ -342,6 +357,7 @@ export default function ExpeditionsPage() {
                   backgroundImage: location.background_image || location.backgroundImage
                 }}
                 onStartExpedition={handleStartExpedition}
+                disabled={isLoading}
               />
             ))}
           </div>

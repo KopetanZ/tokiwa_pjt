@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuth } from '@/contexts/GameContext'
@@ -80,8 +80,8 @@ export function AuthWelcomeScreen() {
           // データベースエラーの場合は代替手段を提示
           if (error.message.includes('Database error') || error.message.includes('saving new user')) {
             addNotification({
-              type: 'info',
-              message: 'データベース設定が必要です。クイックスタートをお試しください。'
+              type: 'warning',
+              message: 'Supabaseデータベースの設定が必要です。開発環境では「🎮 クイックスタート」ボタンをご利用ください。'
             })
           }
         } else {
@@ -216,6 +216,17 @@ export function AuthWelcomeScreen() {
     }, 500)
   }
 
+  // 認証済みの場合はダッシュボードにリダイレクト
+  useEffect(() => {
+    if (isAuthenticated) {
+      const timer = setTimeout(() => {
+        window.location.href = '/dashboard'
+      }, 100)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [isAuthenticated])
+  
   if (isAuthenticated) {
     return (
       <div className="text-center space-y-6">

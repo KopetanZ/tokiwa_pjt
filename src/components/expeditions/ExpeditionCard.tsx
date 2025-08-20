@@ -46,12 +46,14 @@ interface ExpeditionCardProps {
   expedition: ExpeditionSummary
   onIntervene: (expeditionId: string) => void
   onRecall: (expeditionId: string) => void
+  disabled?: boolean
 }
 
 export function ExpeditionCard({
   expedition,
   onIntervene,
-  onRecall
+  onRecall,
+  disabled = false
 }: ExpeditionCardProps) {
   const [timeRemaining, setTimeRemaining] = useState('')
   const [currentEvents, setCurrentEvents] = useState<ExpeditionEvent[]>([])

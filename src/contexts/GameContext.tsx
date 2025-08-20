@@ -396,9 +396,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   
   // エラーハンドラーを状態に設定（初期状態では空の配列）
   useEffect(() => {
-    // エラーハンドラーが利用可能になったら初期化完了
-    if (errorHandler) {
-      dispatch({ type: 'SET_LOADING', payload: false })
+    // エラーハンドラーが利用可能になったら記録（ローディング状態は認証完了時に変更）
+    if (errorHandler && process.env.NODE_ENV === 'development') {
+      console.log('🔧 GameContext: エラーハンドラー初期化完了')
     }
   }, [errorHandler])
 
@@ -409,16 +409,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [state.isMockMode, state.isAuthenticated, state.user?.id])
 
   // デバッグ用ログ（本番環境では削除）
+  const prevShouldUseRealDataRef = useRef(shouldUseRealData)
   useEffect(() => {
-    console.log('🎮 GameContext データソース:', {
-      isMockMode: state.isMockMode,
-      hasUser: !!state.user,
-      shouldUseRealData,
-      userId: state.user?.id ? `${state.user.id.substring(0, 8)}...` : 'none',
-      isAuthenticated: state.isAuthenticated,
-      authLoading: state.authLoading
-    })
-  }, [state.isMockMode, state.user, shouldUseRealData, state.isAuthenticated, state.authLoading])
+    if (prevShouldUseRealDataRef.current !== shouldUseRealData) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎮 GameContext データソース:', {
+          isMockMode: state.isMockMode,
+          hasUser: !!state.user,
+          shouldUseRealData,
+          userId: state.user?.id ? `${state.user.id.substring(0, 8)}...` : 'none',
+          isAuthenticated: state.isAuthenticated,
+          authLoading: state.authLoading
+        })
+      }
+      prevShouldUseRealDataRef.current = shouldUseRealData
+    }
+  }, [shouldUseRealData, state.isMockMode, state.isAuthenticated, state.authLoading])
 
   const gameStateHook = useGameState(shouldUseRealData && state.user?.id ? state.user.id : '')
 
@@ -464,64 +470,80 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
       return () => subscription.unsubscribe()
     } else {
-      // Supabaseが利用できない場合はモックモードを有効化
-      console.warn('🔐 GameContext: Supabaseが利用できません。モックモードを有効化します。')
-      dispatch({ type: 'ENABLE_MOCK_MODE' })
+      // Supabaseが利用できない場合は認証の初期化のみ完了させる（モックモードは手動で有効化）
+      console.warn('🔐 GameContext: Supabaseが利用できません。認証初期化のみ完了します。')
       dispatch({ type: 'SET_LOADING', payload: false })
       dispatch({ type: 'SET_AUTH_LOADING', payload: false })
     }
   }, [])
 
   // ゲームデータ同期（モックモードでない場合のみ）
+  const prevGameStateRef = useRef<{
+    profileId: string | null
+    pokemonLength: number
+    trainersLength: number
+    expeditionsLength: number
+    facilitiesLength: number
+    transactionsLength: number
+    isConnected: boolean
+    isLoading: boolean
+  }>({ profileId: null, pokemonLength: 0, trainersLength: 0, expeditionsLength: 0, facilitiesLength: 0, transactionsLength: 0, isConnected: false, isLoading: true })
+  
   useEffect(() => {
     if (state.user && !state.isMockMode) {
-      const newGameData: GameContextState['gameData'] = {
-        profile: gameStateHook.profile?.profile as GameContextState['gameData']['profile'] || null,
-        pokemon: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon : [],
-        trainers: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers : [],
-        expeditions: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions : [],
-        facilities: Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities : [],
-        transactions: Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions : [],
-        progress: gameStateHook.progress?.progress || null,
-        analysis: Array.isArray(gameStateHook.analysis?.analyses) ? gameStateHook.analysis.analyses : []
+      const currentGameState = {
+        profileId: (gameStateHook.profile?.profile as any)?.id || null,
+        pokemonLength: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon.length : 0,
+        trainersLength: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers.length : 0,
+        expeditionsLength: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions.length : 0,
+        facilitiesLength: Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities.length : 0,
+        transactionsLength: Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions.length : 0,
+        isConnected: gameStateHook.isConnected,
+        isLoading: gameStateHook.isLoading
       }
       
-      // データが実際に変更された場合のみ更新（深い比較を避ける）
+      // データが実際に変更された場合のみ更新
       const hasDataChanged = 
-        (newGameData.profile?.id !== state.gameData.profile?.id) ||
-        newGameData.pokemon.length !== state.gameData.pokemon.length ||
-        newGameData.trainers.length !== state.gameData.trainers.length ||
-        newGameData.expeditions.length !== state.gameData.expeditions.length ||
-        newGameData.facilities.length !== state.gameData.facilities.length ||
-        newGameData.transactions.length !== state.gameData.transactions.length ||
-        gameStateHook.isConnected !== state.isConnected ||
-        gameStateHook.isLoading !== state.isLoading
+        currentGameState.profileId !== prevGameStateRef.current.profileId ||
+        currentGameState.pokemonLength !== prevGameStateRef.current.pokemonLength ||
+        currentGameState.trainersLength !== prevGameStateRef.current.trainersLength ||
+        currentGameState.expeditionsLength !== prevGameStateRef.current.expeditionsLength ||
+        currentGameState.facilitiesLength !== prevGameStateRef.current.facilitiesLength ||
+        currentGameState.transactionsLength !== prevGameStateRef.current.transactionsLength ||
+        currentGameState.isConnected !== prevGameStateRef.current.isConnected ||
+        currentGameState.isLoading !== prevGameStateRef.current.isLoading
       
       if (hasDataChanged) {
+        const newGameData: GameContextState['gameData'] = {
+          profile: gameStateHook.profile?.profile as GameContextState['gameData']['profile'] || null,
+          pokemon: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon : [],
+          trainers: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers : [],
+          expeditions: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions : [],
+          facilities: Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities : [],
+          transactions: Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions : [],
+          progress: gameStateHook.progress?.progress || null,
+          analysis: Array.isArray(gameStateHook.analysis?.analyses) ? gameStateHook.analysis.analyses : []
+        }
+        
         dispatch({ type: 'UPDATE_GAME_DATA', payload: newGameData })
         dispatch({ type: 'SET_CONNECTION', payload: gameStateHook.isConnected })
         dispatch({ type: 'SET_LOADING', payload: gameStateHook.isLoading })
         dispatch({ type: 'SET_ERRORS', payload: gameStateHook.errors })
+        
+        prevGameStateRef.current = currentGameState
       }
     }
-  }, [
-    state.user?.id,
-    state.isMockMode,
-    (gameStateHook.profile?.profile as GameContextState['gameData']['profile'])?.id,
-    Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon.length : 0,
-    Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers.length : 0,
-    Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions.length : 0,
-    Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities.length : 0,
-    Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions.length : 0,
-    gameStateHook.isConnected,
-    gameStateHook.isLoading
-  ])
+  }, [state.user?.id, state.isMockMode, gameStateHook])
 
   // 通知の自動削除
+  const notificationsRef = useRef(state.ui.notifications)
+  notificationsRef.current = state.ui.notifications
+  
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date()
-      state.ui.notifications.forEach(notification => {
+      const currentNotifications = notificationsRef.current
+      currentNotifications.forEach(notification => {
         if (notification.autoHide !== false && now.getTime() - notification.timestamp.getTime() > 5000) {
           dispatch({ type: 'REMOVE_NOTIFICATION', payload: notification.id })
         }
@@ -529,7 +551,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }, 1000)
 
     return () => clearInterval(timer)
-  }, [state.ui.notifications])
+  }, [])
 
   // ローカルストレージから設定読み込み
   useEffect(() => {
@@ -553,7 +575,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('設定読み込みエラー:', error)
     }
-  }, [])
+  }, []) // 依存配列を空にする
 
   // 設定をローカルストレージに保存
   useEffect(() => {
@@ -566,7 +588,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('設定保存エラー:', error)
     }
-  }, [state.settings, state.ui.isDarkMode, state.ui.soundEnabled])
+  }, [state.settings.autoSave, state.settings.realTimeUpdates, state.settings.notifications, state.settings.difficulty, state.ui.isDarkMode, state.ui.soundEnabled])
 
   // アクション定義
   const actions = {
@@ -660,44 +682,79 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }
 
   // モックモードの自動判定と初期化
+  const prevMockModeStateRef = useRef({
+    hasSupabase: !!supabase,
+    isAuthenticated: false,
+    authLoading: true,
+    hasUser: false,
+    isMockMode: false
+  })
+  
   useEffect(() => {
-    console.log('🎮 GameContext: モックモード判定開始', {
+    const currentMockModeState = {
       hasSupabase: !!supabase,
       isAuthenticated: state.isAuthenticated,
       authLoading: state.authLoading,
       hasUser: !!state.user,
       isMockMode: state.isMockMode
-    })
-    
-    // Supabaseが利用できない場合や、認証に失敗した場合はモックモードを有効化
-    if (!supabase || (!state.isAuthenticated && !state.authLoading)) {
-      const shouldEnableMockMode = !supabase || 
-        (state.authLoading === false && !state.isAuthenticated && !state.user)
-      
-      console.log('🎮 GameContext: モックモード判定結果', { shouldEnableMockMode })
-      
-      if (shouldEnableMockMode && !state.isMockMode) {
-        console.log('🎮 GameContext: モックモードを有効化します')
-        dispatch({ type: 'ENABLE_MOCK_MODE' })
-        
-        // モックユーザーを設定
-        dispatch({ type: 'SET_USER', payload: MOCK_USER as any })
-        dispatch({ type: 'SET_LOADING', payload: false })
-        dispatch({ type: 'SET_AUTH_LOADING', payload: false })
-      }
     }
-  }, [supabase, state.isAuthenticated, state.authLoading, state.user, state.isMockMode])
+    
+    // 状態が変わった場合のみ処理
+    const hasStateChanged = JSON.stringify(currentMockModeState) !== JSON.stringify(prevMockModeStateRef.current)
+    
+    if (hasStateChanged) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🎮 GameContext: モックモード判定開始', currentMockModeState)
+      }
+      
+      // 既にモックモードが有効な場合は何もしない
+      if (state.isMockMode) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🎮 GameContext: モックモードは既に有効です')
+        }
+        prevMockModeStateRef.current = currentMockModeState
+        return
+      }
+      
+      // モックモードの自動有効化を無効化（ユーザーが明示的にクイックスタートを選択した場合のみ有効にする）
+      // if (!supabase || (!state.isAuthenticated && !state.authLoading)) {
+      //   const shouldEnableMockMode = !supabase || 
+      //     (state.authLoading === false && !state.isAuthenticated && !state.user)
+      //   
+      //   if (process.env.NODE_ENV === 'development') {
+      //     console.log('🎮 GameContext: モックモード判定結果', { shouldEnableMockMode })
+      //   }
+      //   
+      //   if (shouldEnableMockMode) {
+      //     console.log('🎮 GameContext: モックモードを有効化します')
+      //     dispatch({ type: 'ENABLE_MOCK_MODE' })
+      //     
+      //     // モックユーザーを設定
+      //     dispatch({ type: 'SET_USER', payload: MOCK_USER as any })
+      //     dispatch({ type: 'SET_LOADING', payload: false })
+      //     dispatch({ type: 'SET_AUTH_LOADING', payload: false })
+      //   }
+      // }
+      
+      prevMockModeStateRef.current = currentMockModeState
+    }
+  }, [supabase, state.isAuthenticated, state.authLoading, state.user?.id, state.isMockMode])
 
   // 認証状態の初期化完了を待つ
   useEffect(() => {
     // 認証の初期化が完了したら、適切な状態に設定
     if (!state.authLoading) {
-      if (!state.isAuthenticated && !state.isMockMode) {
+      if (state.isMockMode) {
+        // モックモードが有効な場合は、初期化完了
+        console.log('🎮 GameContext: モックモード有効、初期化完了')
+        dispatch({ type: 'SET_LOADING', payload: false })
+      } else if (state.isAuthenticated) {
+        // 認証されている場合も、ローディング状態を終了
+        console.log('🎮 GameContext: 認証完了、ローディング終了')
+        dispatch({ type: 'SET_LOADING', payload: false })
+      } else {
         // 認証されていない場合は、ローディング状態を終了
         console.log('🎮 GameContext: 認証初期化完了、未認証状態')
-        dispatch({ type: 'SET_LOADING', payload: false })
-      } else if (state.isMockMode) {
-        console.log('🎮 GameContext: モックモード有効、初期化完了')
         dispatch({ type: 'SET_LOADING', payload: false })
       }
     }
@@ -761,13 +818,11 @@ export function useAuth() {
   // Supabaseが利用可能かチェック
   const canUseSupabase = supabase !== null
   
-  // モックモード判定の改善（セッション管理統合）
-  const isMockMode = !canUseSupabase || state.isMockMode || !state.session.isAuthenticated
-  
-  // ユーザーの判定（セッション情報を優先）
-  const user = isMockMode ? MOCK_USER : (state.session.user || state.user)
-  const isAuthenticated = isMockMode ? true : state.session.isAuthenticated
-  const isLoading = state.authLoading || state.session.isLoading
+  // シンプルな認証状態判定
+  const isMockMode = state.isMockMode
+  const user = isMockMode ? MOCK_USER : state.user
+  const isAuthenticated = state.isAuthenticated
+  const isLoading = state.isLoading
 
   // 統合認証システムを使用
   const signIn = useCallback(async (email: string, password: string) => {
@@ -815,7 +870,7 @@ export function useAuth() {
     session: state.session,
     sessionExpiry: state.sessionExpiry,
     lastActivity: state.lastActivity,
-    authError: state.session.error,
+    authError: state.session?.error || null,
     
     // 認証操作
     signIn,

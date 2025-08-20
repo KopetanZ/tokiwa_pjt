@@ -9,6 +9,7 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { formatMoney } from '@/lib/utils'
 import { getSafeGameData, calculateGameStats } from '@/lib/data-utils'
 import { saveEmergencyEventResult, processEmergencyEvent, processMockEmergencyEvent } from '@/lib/emergency-events'
+import { gameController } from '@/lib/game-logic'
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isMockMode, isLoading: authLoading } = useAuth()
@@ -31,6 +32,31 @@ export default function DashboardPage() {
     resolved: boolean
   } | null>(null)
   const [emergencyTimer, setEmergencyTimer] = useState<NodeJS.Timeout | null>(null)
+  const [gameStats, setGameStats] = useState<any>(null)
+  const [economicData, setEconomicData] = useState<any>(null)
+
+  // ゲームデータ読み込み
+  useEffect(() => {
+    const loadGameStats = async () => {
+      try {
+        const stats = gameController.getGameStats()
+        const economic = gameController.getEconomicStatus()
+        
+        setGameStats(stats)
+        setEconomicData(economic)
+        
+        console.log('📊 ゲーム統計読み込み完了:', { stats, economic })
+      } catch (error) {
+        console.error('ゲーム統計読み込みエラー:', error)
+      }
+    }
+    
+    loadGameStats()
+    
+    // 30秒ごとに更新
+    const interval = setInterval(loadGameStats, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   // クイックアクションハンドラー
   const handleNewExpedition = () => {
@@ -227,7 +253,14 @@ export default function DashboardPage() {
 
   // 安全なゲームデータ取得
   const safeGameData = getSafeGameData(isMockMode, gameData, user)
-  const gameStats = calculateGameStats(safeGameData)
+  const legacyGameStats = calculateGameStats(safeGameData)
+  
+  // ゲームロジックからのデータを優先、フォールバックで既存データを使用
+  const currentGameStats = gameStats || legacyGameStats
+  const currentMoney = economicData?.current_money || legacyGameStats.currentMoney
+  const monthlyIncome = economicData?.monthly_income || 15000
+  const monthlyExpenses = economicData?.monthly_expenses || 8500
+  const netIncome = economicData?.net_income || (monthlyIncome - monthlyExpenses)
 
   // ユーザーが存在しない場合（開発環境では表示を続行）
   const isDevelopment = process.env.NODE_ENV === 'development'
@@ -288,22 +321,33 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {formatMoney(gameStats.currentMoney)}
+                {formatMoney(currentMoney)}
               </div>
+              {economicData && (
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  キャッシュフロー: {economicData.cash_flow_trend === 'positive' ? '📈' : economicData.cash_flow_trend === 'negative' ? '📉' : '↔️'}
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="font-pixel text-xs">今月収入</span>
-                <span className="font-pixel text-xs">+₽15,000</span>
+                <span className="font-pixel text-xs text-green-600">+₽{monthlyIncome.toLocaleString()}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-pixel text-xs">今月支出</span>
-                <span className="font-pixel text-xs">-₽8,500</span>
+                <span className="font-pixel text-xs text-red-600">-₽{monthlyExpenses.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between font-pixel text-xs">
+                <span>純利益</span>
+                <span className={netIncome >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {netIncome >= 0 ? '+' : ''}₽{netIncome.toLocaleString()}
+                </span>
               </div>
               <PixelProgressBar 
-                value={65} 
+                value={Math.max(0, Math.min(100, (netIncome / monthlyIncome) * 100))} 
                 max={100} 
-                color="exp"
+                color={netIncome >= 0 ? "exp" : "danger"}
                 showLabel={false}
               />
             </div>
@@ -315,14 +359,19 @@ export default function DashboardPage() {
           <div className="space-y-3">
             <div className="text-center">
               <div className="font-pixel-large text-retro-gb-dark">
-                {gameStats.reputation}
+                {currentGameStats.reputation}
               </div>
               <div className="font-pixel text-xs text-retro-gb-mid">
                 評判ポイント
               </div>
+              {gameStats && (
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  v{gameStats.gameVersion}
+                </div>
+              )}
             </div>
             <PixelProgressBar 
-              value={gameStats.reputation} 
+              value={currentGameStats.reputation} 
               max={1000} 
               color="hp"
               showLabel={true}
@@ -334,14 +383,19 @@ export default function DashboardPage() {
         <PixelCard title="現在の活動">
           <div className="space-y-3">
             <div className="font-pixel text-xs text-retro-gb-dark">
-              進行中の派遣: {gameStats.activeExpeditions}件
+              進行中の派遣: {currentGameStats.activeExpeditions}件
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              利用可能トレーナー: {gameStats.totalTrainers}人
+              利用可能トレーナー: {currentGameStats.totalTrainers}人
             </div>
             <div className="font-pixel text-xs text-retro-gb-dark">
-              総ポケモン数: {gameStats.totalPokemon}匹
+              総ポケモン数: {currentGameStats.totalPokemon}匹
             </div>
+            {gameStats && (
+              <div className="font-pixel text-xs text-retro-gb-mid">
+                派遣先: {gameStats.locations}箇所
+              </div>
+            )}
             <PixelButton size="sm" className="w-full" onClick={handleViewDetails}>
               詳細を見る
             </PixelButton>
@@ -351,46 +405,127 @@ export default function DashboardPage() {
 
       {/* クイックアクション */}
       <PixelCard title="クイックアクション">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <PixelButton size="sm" onClick={handleNewExpedition}>
-            新しい派遣
-          </PixelButton>
-          <PixelButton size="sm" variant="secondary" onClick={handleHireTrainer}>
-            トレーナー雇用
-          </PixelButton>
-          <PixelButton size="sm" variant="secondary" onClick={handleUpgradeFacility}>
-            施設強化
-          </PixelButton>
-          <PixelButton size="sm" variant="secondary" onClick={handleManagePokemon}>
-            ポケモン管理
-          </PixelButton>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <PixelButton size="sm" onClick={handleNewExpedition}>
+              新しい派遣
+            </PixelButton>
+            <PixelButton size="sm" variant="secondary" onClick={handleHireTrainer}>
+              トレーナー雇用
+            </PixelButton>
+            <PixelButton size="sm" variant="secondary" onClick={handleUpgradeFacility}>
+              施設強化
+            </PixelButton>
+            <PixelButton size="sm" variant="secondary" onClick={handleManagePokemon}>
+              ポケモン管理
+            </PixelButton>
+          </div>
+          
+          {/* デバッグアクション（開発時のみ） */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="border-t border-retro-gb-mid pt-3">
+              <div className="font-pixel text-xs text-retro-gb-mid mb-2">🔧 デバッグアクション</div>
+              <div className="grid grid-cols-2 gap-2">
+                <PixelButton 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={() => {
+                    gameController.addDebugMoney(10000)
+                    addNotification({ type: 'success', message: '₽10,000を追加しました' })
+                  }}
+                >
+                  +₽10K
+                </PixelButton>
+                <PixelButton 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={async () => {
+                    try {
+                      const pokemon = await gameController.generateDebugPokemon()
+                      addNotification({ 
+                        type: 'success', 
+                        message: `${pokemon?.name_ja || 'ポケモン'}を発見！` 
+                      })
+                    } catch (error) {
+                      addNotification({ type: 'error', message: 'ポケモン生成エラー' })
+                    }
+                  }}
+                >
+                  ポケモン発見
+                </PixelButton>
+              </div>
+            </div>
+          )}
         </div>
       </PixelCard>
 
-      {/* 最近の活動 */}
-      <PixelCard title="最近の活動">
-        <div className="space-y-3">
-          {[
-            { time: '2時間前', event: 'タケシが22番道路から帰還', result: 'ポッポ×1、₽800獲得' },
-            { time: '4時間前', event: 'カスミがトキワの森へ出発', result: '予定時間: 6時間' },
-            { time: '6時間前', event: 'タケシがレベルアップ', result: 'レンジャー Lv.3 → Lv.4' },
-          ].map((activity, index) => (
-            <div key={index} className="space-y-1 pb-2 border-b border-retro-gb-mid last:border-b-0">
-              <div className="flex justify-between items-start">
-                <span className="font-pixel text-xs text-retro-gb-dark flex-1">
-                  {activity.event}
-                </span>
-                <span className="font-pixel text-xs text-retro-gb-mid">
-                  {activity.time}
-                </span>
+      {/* 経済詳細 & 最近の活動 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* 経済結果レポート */}
+        <PixelCard title="経済サマリー">
+          <div className="space-y-3">
+            {economicData ? (
+              <>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <div className="font-pixel text-retro-gb-mid">総収入</div>
+                    <div className="font-pixel text-green-600">₽{economicData.total_income.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="font-pixel text-retro-gb-mid">総支出</div>
+                    <div className="font-pixel text-red-600">₽{economicData.total_expenses.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div className="font-pixel text-retro-gb-mid">純利益</div>
+                    <div className={`font-pixel ${economicData.net_income >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      ₽{economicData.net_income.toLocaleString()}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="font-pixel text-retro-gb-mid">トレンド</div>
+                    <div className="font-pixel text-retro-gb-dark">
+                      {economicData.cash_flow_trend === 'positive' ? '📈 成長' : 
+                       economicData.cash_flow_trend === 'negative' ? '📉 下降' : '↔️ 安定'}
+                    </div>
+                  </div>
+                </div>
+                <PixelButton size="sm" className="w-full" onClick={() => router.push('/dashboard/analytics')}>
+                  詳細レポートを見る
+                </PixelButton>
+              </>
+            ) : (
+              <div className="font-pixel text-xs text-retro-gb-mid text-center py-4">
+                経済データ読み込み中...
               </div>
-              <div className="font-pixel text-xs text-retro-gb-mid">
-                {activity.result}
+            )}
+          </div>
+        </PixelCard>
+
+        {/* 最近の活動 */}
+        <PixelCard title="最近の活動">
+          <div className="space-y-3">
+            {[
+              { time: '2時間前', event: 'タケシが22番道路から帰還', result: 'ポッポ×1、₽800獲得' },
+              { time: '4時間前', event: 'カスミがトキワの森へ出発', result: '予定時間: 6時間' },
+              { time: '6時間前', event: 'タケシがレベルアップ', result: 'レンジャー Lv.3 → Lv.4' },
+            ].map((activity, index) => (
+              <div key={index} className="space-y-1 pb-2 border-b border-retro-gb-mid last:border-b-0">
+                <div className="flex justify-between items-start">
+                  <span className="font-pixel text-xs text-retro-gb-dark flex-1">
+                    {activity.event}
+                  </span>
+                  <span className="font-pixel text-xs text-retro-gb-mid">
+                    {activity.time}
+                  </span>
+                </div>
+                <div className="font-pixel text-xs text-retro-gb-mid">
+                  {activity.result}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </PixelCard>
+            ))}
+          </div>
+        </PixelCard>
+      </div>
 
       {/* 緊急通知 */}
       {showEmergency && emergencyEvent && (
