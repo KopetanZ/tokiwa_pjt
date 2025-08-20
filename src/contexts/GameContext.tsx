@@ -7,6 +7,7 @@ import { User } from '@supabase/supabase-js'
 import { MOCK_USER, MOCK_GAME_DATA } from '@/lib/mock-data'
 import { useErrorHandler, DatabaseError } from '@/lib/error-handling'
 import { authSessionManager, AuthEventType, SessionState } from '@/lib/auth-integration'
+import { createProgressManager, ProgressManager, GameProgress, GameBalance } from '@/lib/progress-management'
 
 // ゲーム状態の型定義
 export interface GameContextState {
@@ -26,6 +27,11 @@ export interface GameContextState {
   authLoading: boolean
   sessionExpiry: Date | null
   lastActivity: Date | null
+  
+  // 進行状況管理
+  progressManager: ProgressManager | null
+  currentProgress: GameProgress | null
+  currentBalance: GameBalance | null
   
   // ゲームデータ
   gameData: {
@@ -99,6 +105,9 @@ type GameAction =
   | { type: 'SET_AUTH_LOADING'; payload: boolean }
   | { type: 'SESSION_EXPIRED' }
   | { type: 'SESSION_WARNING'; payload: any }
+  | { type: 'SET_PROGRESS_MANAGER'; payload: ProgressManager | null }
+  | { type: 'UPDATE_PROGRESS'; payload: GameProgress }
+  | { type: 'UPDATE_BALANCE'; payload: GameBalance }
 
 // 初期状態
 const initialState: GameContextState = {
@@ -124,6 +133,12 @@ const initialState: GameContextState = {
   authLoading: true,
   sessionExpiry: null,
   lastActivity: null,
+  
+  // 進行状況管理の初期状態
+  progressManager: null,
+  currentProgress: null,
+  currentBalance: null,
+  
   gameData: {
     profile: null,
     pokemon: [],
@@ -352,6 +367,28 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
         }
       }
     
+    case 'SET_PROGRESS_MANAGER':
+      return {
+        ...state,
+        progressManager: action.payload
+      }
+    
+    case 'UPDATE_PROGRESS':
+      return {
+        ...state,
+        currentProgress: action.payload,
+        gameData: {
+          ...state.gameData,
+          progress: action.payload
+        }
+      }
+    
+    case 'UPDATE_BALANCE':
+      return {
+        ...state,
+        currentBalance: action.payload
+      }
+    
     default:
       return state
   }
@@ -367,6 +404,17 @@ const GameContext = createContext<{
     signOut: () => Promise<void>
     enableMockMode: () => void
     disableMockMode: () => void
+    
+    // プロファイル管理
+    createProfile: (profileData: { trainer_name: string; school_name: string }) => Promise<void>
+    updateProfile: (updates: Partial<{ trainer_name: string; school_name: string; current_money: number; total_reputation: number }>) => Promise<void>
+    
+    // 進行状況管理
+    addExperience: (exp: number) => Promise<{ levelUp: boolean; newLevel?: number }>
+    updatePlayTime: (minutesPlayed: number) => Promise<boolean>
+    unlockFeature: (feature: string) => Promise<boolean>
+    addAchievementPoints: (points: number) => Promise<boolean>
+    changeDifficulty: (difficulty: GameProgress['difficulty']) => Promise<boolean>
     
     // 通知関連
     addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => void
@@ -535,6 +583,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state.user?.id, state.isMockMode, gameStateHook])
 
+  // 進行状況マネージャーの初期化
+  useEffect(() => {
+    if (state.user && !state.isMockMode) {
+      const progressManager = createProgressManager(state.user.id)
+      dispatch({ type: 'SET_PROGRESS_MANAGER', payload: progressManager })
+      
+      // 初期進行状況とバランスをロード
+      progressManager.getProgress().then((progress) => {
+        if (progress) {
+          dispatch({ type: 'UPDATE_PROGRESS', payload: progress })
+        }
+      })
+      
+      progressManager.getBalance().then((balance) => {
+        if (balance) {
+          dispatch({ type: 'UPDATE_BALANCE', payload: balance })
+        }
+      })
+      
+      console.log('📊 進行状況マネージャーが初期化されました')
+    } else {
+      dispatch({ type: 'SET_PROGRESS_MANAGER', payload: null })
+      dispatch({ type: 'UPDATE_PROGRESS', payload: null as any })
+      dispatch({ type: 'UPDATE_BALANCE', payload: null as any })
+    }
+  }, [state.user?.id, state.isMockMode])
+
   // 通知の自動削除
   const notificationsRef = useRef(state.ui.notifications)
   notificationsRef.current = state.ui.notifications
@@ -634,6 +709,162 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     disableMockMode: () => {
       console.log('🔄 モックモードを無効化: 実際の認証に戻ります')
       dispatch({ type: 'DISABLE_MOCK_MODE' })
+    },
+
+    // プロファイル管理アクション
+    createProfile: async (profileData: { trainer_name: string; school_name: string }) => {
+      if (!supabase || !state.user) {
+        throw new Error('認証が必要です')
+      }
+
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .insert({
+            id: state.user.id,
+            email: state.user.email,
+            trainer_name: profileData.trainer_name,
+            school_name: profileData.school_name,
+            current_money: 50000, // 初期資金
+            total_reputation: 0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+
+        if (error) {
+          console.error('プロファイル作成エラー:', error)
+          throw error
+        }
+
+        console.log('✅ プロファイルが作成されました:', profileData.trainer_name)
+        
+        // ゲーム進行状況も初期化
+        await supabase
+          .from('game_progress')
+          .insert({
+            user_id: state.user.id,
+            level: 1,
+            experience: 0,
+            next_level_exp: 1000,
+            total_play_time: 0,
+            achievement_points: 0,
+            unlocked_features: ['basic_training', 'pokemon_management', 'simple_expeditions'],
+            difficulty: 'normal',
+            updated_at: new Date().toISOString()
+          })
+
+        // ゲームバランス設定も初期化
+        await supabase
+          .from('game_balance')
+          .insert({
+            user_id: state.user.id,
+            trainer_growth_rate: 1.0,
+            pokemon_growth_rate: 1.0,
+            expedition_difficulty: 1.0,
+            economy_inflation: 1.0,
+            research_speed: 1.0,
+            facility_efficiency: 1.0,
+            updated_at: new Date().toISOString()
+          })
+
+      } catch (error) {
+        console.error('プロファイル作成エラー:', error)
+        throw error
+      }
+    },
+
+    updateProfile: async (updates: Partial<{ trainer_name: string; school_name: string; current_money: number; total_reputation: number }>) => {
+      if (!supabase || !state.user) {
+        throw new Error('認証が必要です')
+      }
+
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({
+            ...updates,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', state.user.id)
+
+        if (error) {
+          console.error('プロファイル更新エラー:', error)
+          throw error
+        }
+
+        console.log('✅ プロファイルが更新されました')
+      } catch (error) {
+        console.error('プロファイル更新エラー:', error)
+        throw error
+      }
+    },
+
+    // 進行状況管理アクション実装
+    addExperience: async (exp: number) => {
+      if (!state.progressManager) {
+        throw new Error('進行状況マネージャーが初期化されていません')
+      }
+      const result = await state.progressManager.addExperience(exp)
+      
+      // 進行状況を更新
+      const updatedProgress = await state.progressManager.getProgress()
+      if (updatedProgress) {
+        dispatch({ type: 'UPDATE_PROGRESS', payload: updatedProgress })
+      }
+      
+      return result
+    },
+
+    updatePlayTime: async (minutesPlayed: number) => {
+      if (!state.progressManager) {
+        throw new Error('進行状況マネージャーが初期化されていません')
+      }
+      return await state.progressManager.updatePlayTime(minutesPlayed)
+    },
+
+    unlockFeature: async (feature: string) => {
+      if (!state.progressManager) {
+        throw new Error('進行状況マネージャーが初期化されていません')
+      }
+      const result = await state.progressManager.unlockFeature(feature)
+      
+      // 進行状況を更新
+      const updatedProgress = await state.progressManager.getProgress()
+      if (updatedProgress) {
+        dispatch({ type: 'UPDATE_PROGRESS', payload: updatedProgress })
+      }
+      
+      return result
+    },
+
+    addAchievementPoints: async (points: number) => {
+      if (!state.progressManager) {
+        throw new Error('進行状況マネージャーが初期化されていません')
+      }
+      const result = await state.progressManager.addAchievementPoints(points)
+      
+      // 進行状況を更新
+      const updatedProgress = await state.progressManager.getProgress()
+      if (updatedProgress) {
+        dispatch({ type: 'UPDATE_PROGRESS', payload: updatedProgress })
+      }
+      
+      return result
+    },
+
+    changeDifficulty: async (difficulty: GameProgress['difficulty']) => {
+      if (!state.progressManager) {
+        throw new Error('進行状況マネージャーが初期化されていません')
+      }
+      const result = await state.progressManager.changeDifficulty(difficulty)
+      
+      // 進行状況を更新
+      const updatedProgress = await state.progressManager.getProgress()
+      if (updatedProgress) {
+        dispatch({ type: 'UPDATE_PROGRESS', payload: updatedProgress })
+      }
+      
+      return result
     },
 
     addNotification: (notification: Omit<Notification, 'id' | 'timestamp'>) => {

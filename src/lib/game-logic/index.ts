@@ -20,6 +20,7 @@ import { economySystem, EconomySystem } from './economy-system'
 import { soundSystem, SoundSystem, playExpeditionStartSound, playPokemonCatchSound, playMoneySound, playLevelUpSound } from './sound-system'
 import { TrainerSystem } from './trainer-system'
 import { gameRandom } from './random-system'
+import { supabase } from '../supabase'
 
 /**
  * 統合ゲームコントローラー
@@ -38,6 +39,7 @@ export class GameController {
   private pokemonSystem = pokemonSystem
   private economySystem = economySystem
   private soundSystem = soundSystem
+  private userId: string | null = null
   
   /**
    * ゲームコントローラーを初期化
@@ -59,6 +61,27 @@ export class GameController {
     this.soundSystem.playBGM('bgm_main')
     
     console.log('🎮 ゲームコントローラー初期化完了')
+    
+    // ユーザー情報初期化
+    await this.initializeUser()
+  }
+  
+  /**
+   * ユーザー初期化
+   * Supabaseからユーザー情報を取得し、内部状態を初期化
+   */
+  private async initializeUser(): Promise<void> {
+    try {
+      if (supabase) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          this.userId = user.id
+          console.log('👤 ユーザー情報初期化完了:', user.id)
+        }
+      }
+    } catch (error) {
+      console.error('ユーザー初期化エラー:', error)
+    }
   }
   
   /**
@@ -124,7 +147,89 @@ export class GameController {
         soundsPlayed.push('level_up')
       }
       
-      // 6. 最終結果の統合・返却
+      // 6. データベースに派遣結果を保存
+      if (this.userId && supabase) {
+        try {
+          // 派遣記録を保存
+          const { data: expeditionData, error: expeditionError } = await supabase
+            .from('expeditions')
+            .insert({
+              user_id: this.userId,
+              trainer_id: params.trainerId,
+              location_id: parseInt(params.locationId),
+              expedition_mode: 'balanced',
+              target_duration_hours: params.durationHours,
+              status: result.success ? 'completed' : 'failed',
+              success_rate: result.successRate,
+              rewards_earned: result.rewards,
+              completion_time: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            })
+            .select('id')
+            .single()
+          
+          if (expeditionError) {
+            console.error('派遣記録保存エラー:', expeditionError)
+          } else {
+            console.log('✅ 派遣記録が保存されました')
+          }
+          
+          // 捕獲したポケモンをデータベースに保存
+          if (result.rewards.pokemonCaught.length > 0) {
+            const pokemonInsertData = result.rewards.pokemonCaught.map(pokemon => ({
+              user_id: this.userId,
+              dex_number: pokemon.dex_number,
+              name: pokemon.name,
+              level: pokemon.level,
+              hp: pokemon.hp,
+              attack: pokemon.attack,
+              defense: pokemon.defense,
+              special_attack: pokemon.special_attack,
+              special_defense: pokemon.special_defense,
+              speed: pokemon.speed,
+              types: pokemon.types,
+              nature: pokemon.nature,
+              is_shiny: pokemon.is_shiny || false,
+              status: 'available',
+              caught_at: new Date().toISOString()
+            }))
+            
+            const { error: pokemonError } = await supabase
+              .from('pokemon')
+              .insert(pokemonInsertData)
+            
+            if (pokemonError) {
+              console.error('捕獲ポケモン保存エラー:', pokemonError)
+            } else {
+              console.log('✅ 捕獲ポケモンが保存されました')
+            }
+          }
+          
+          // 収入記録をデータベースに保存
+          if (moneyGained > 0) {
+            const { error: transactionError } = await supabase
+              .from('transactions')
+              .insert({
+                user_id: this.userId,
+                type: 'income',
+                category: 'expedition',
+                amount: moneyGained,
+                description: `派遣報酬 - ${params.locationId}`,
+                reference_id: expeditionData?.id,
+                created_at: new Date().toISOString()
+              })
+            
+            if (transactionError) {
+              console.error('派遣収入記録エラー:', transactionError)
+            }
+          }
+          
+        } catch (dbError) {
+          console.error('派遣データベース保存エラー:', dbError)
+        }
+      }
+      
+      // 7. 最終結果の統合・返却
       const currentBalance = this.economySystem.getCurrentMoney()
       
       return {
@@ -278,6 +383,69 @@ export class GameController {
         }
       }
       
+      // データベースに保存
+      if (this.userId && supabase) {
+        try {
+          // 職業IDを取得
+          const { data: jobData } = await supabase
+            .from('trainer_jobs')
+            .select('id')
+            .eq('job_name', trainer.job)
+            .single()
+          
+          // トレーナーをデータベースに保存
+          const { error: trainerError } = await supabase
+            .from('trainers')
+            .insert({
+              user_id: this.userId,
+              name: trainer.name,
+              job_id: jobData?.id || null,
+              job_level: trainer.level,
+              job_experience: trainer.experience || 0,
+              preferences: trainer.skills || {},
+              compliance_rate: 80, // デフォルト値
+              trust_level: 50, // デフォルト値
+              personality: trainer.personality || 'balanced',
+              status: 'available',
+              salary: trainer.salary_base,
+              total_earned: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+          
+          if (trainerError) {
+            console.error('トレーナー保存エラー:', trainerError)
+          } else {
+            console.log('✅ トレーナーがデータベースに保存されました')
+          }
+          
+          // 取引記録をデータベースに保存
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: this.userId,
+              type: 'expense',
+              category: 'salary',
+              amount: hireCost,
+              description: `${name} 雇用費用`,
+              reference_id: null,
+              created_at: new Date().toISOString()
+            })
+          
+          if (transactionError) {
+            console.error('取引記録エラー:', transactionError)
+          } else {
+            console.log('✅ 取引記録がデータベースに保存されました')
+          }
+          
+          // ゲーム状態保存
+          await this.saveGameState()
+          
+        } catch (dbError) {
+          console.error('データベース保存エラー:', dbError)
+        }
+      }
+      
       console.log('🎯 新規トレーナー雇用完了:', {
         name: trainer.name,
         job: trainer.job,
@@ -316,19 +484,27 @@ export class GameController {
     healedAmount?: number
   }> {
     try {
-      // 実際の実装では、pokemonIdからPokemonInstanceを取得する必要があります
-      // ここではサンプルデータを使用
-      const samplePokemon: any = {
-        id: pokemonId,
-        species: { base_stats: { hp: 50 } },
-        level: 10,
-        current_hp: 15,
-        max_hp: 35,
+      // データベースからポケモンデータを取得
+      const pokemon = await this.getPokemonById(pokemonId)
+      if (!pokemon) {
+        return {
+          success: false,
+          message: 'ポケモンが見つかりませんでした'
+        }
+      }
+      
+      // PokemonSystemで必要な形式に変換
+      const pokemonForSystem: any = {
+        id: pokemon.id,
+        species: { base_stats: { hp: 50 } }, // 基本値として使用
+        level: pokemon.level,
+        current_hp: pokemon.hp,
+        max_hp: pokemon.max_hp || pokemon.hp,
         status_condition: 'healthy' as const,
         individual_values: { hp: 15, attack: 12, defense: 14, special_attack: 10, special_defense: 12, speed: 13 }
       }
       
-      const result = pokemonSystem.healPokemon(samplePokemon, healType)
+      const result = pokemonSystem.healPokemon(pokemonForSystem, healType)
       
       // 資金チェックと支払い
       const canAfford = this.checkCanAfford(result.cost)
@@ -350,6 +526,46 @@ export class GameController {
         return {
           success: false,
           message: '支払い処理に失敗しました'
+        }
+      }
+      
+      // データベースに保存
+      if (this.userId && supabase) {
+        try {
+          const { error: pokemonError } = await supabase
+            .from('pokemon')
+            .update({
+              hp: result.newHp,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pokemonId)
+            .eq('user_id', this.userId)
+          
+          if (pokemonError) {
+            console.error('ポケモン回復データ保存エラー:', pokemonError)
+          } else {
+            console.log('✅ ポケモン回復データが保存されました')
+          }
+          
+          // 取引記録をデータベースに保存
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: this.userId,
+              type: 'expense',
+              category: 'maintenance',
+              amount: result.cost,
+              description: `ポケモン回復 (${healType})`,
+              reference_id: pokemonId,
+              created_at: new Date().toISOString()
+            })
+          
+          if (transactionError) {
+            console.error('回復取引記録エラー:', transactionError)
+          }
+          
+        } catch (dbError) {
+          console.error('ポケモン回復データベース保存エラー:', dbError)
         }
       }
       
@@ -375,12 +591,21 @@ export class GameController {
     friendshipIncrease?: number
   }> {
     try {
-      const samplePokemon: any = {
-        id: pokemonId,
-        friendship: 100
+      // データベースからポケモンデータを取得
+      const pokemon = await this.getPokemonById(pokemonId)
+      if (!pokemon) {
+        return {
+          success: false,
+          message: 'ポケモンが見つかりませんでした'
+        }
       }
       
-      const result = pokemonSystem.increaseFriendship(samplePokemon, treatmentType)
+      const pokemonForSystem: any = {
+        id: pokemon.id,
+        friendship: pokemon.friendship || 100
+      }
+      
+      const result = pokemonSystem.increaseFriendship(pokemonForSystem, treatmentType)
       
       const canAfford = this.checkCanAfford(result.cost)
       if (!canAfford) {
@@ -401,6 +626,46 @@ export class GameController {
         return {
           success: false,
           message: '支払い処理に失敗しました'
+        }
+      }
+      
+      // データベースに保存
+      if (this.userId && supabase) {
+        try {
+          const { error: pokemonError } = await supabase
+            .from('pokemon')
+            .update({
+              friendship: (pokemon.friendship || 100) + result.friendshipIncrease,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pokemonId)
+            .eq('user_id', this.userId)
+          
+          if (pokemonError) {
+            console.error('なつき度データ保存エラー:', pokemonError)
+          } else {
+            console.log('✅ なつき度データが保存されました')
+          }
+          
+          // 取引記録をデータベースに保存
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: this.userId,
+              type: 'expense',
+              category: 'maintenance',
+              amount: result.cost,
+              description: `なつき度向上 (${treatmentType})`,
+              reference_id: pokemonId,
+              created_at: new Date().toISOString()
+            })
+          
+          if (transactionError) {
+            console.error('なつき度取引記録エラー:', transactionError)
+          }
+          
+        } catch (dbError) {
+          console.error('なつき度データベース保存エラー:', dbError)
         }
       }
       
@@ -428,17 +693,26 @@ export class GameController {
     newLevel?: number
   }> {
     try {
-      const samplePokemon: any = {
-        id: pokemonId,
+      // データベースからポケモンデータを取得
+      const pokemon = await this.getPokemonById(pokemonId)
+      if (!pokemon) {
+        return {
+          success: false,
+          message: 'ポケモンが見つかりませんでした'
+        }
+      }
+      
+      const pokemonForSystem: any = {
+        id: pokemon.id,
         species: { base_stats: { hp: 50 } },
-        level: 8,
-        experience: 200,
-        max_hp: 30,
-        current_hp: 30,
+        level: pokemon.level,
+        experience: pokemon.experience || 0,
+        max_hp: pokemon.max_hp || pokemon.hp,
+        current_hp: pokemon.hp,
         individual_values: { hp: 15, attack: 12, defense: 14, special_attack: 10, special_defense: 12, speed: 13 }
       }
       
-      const result = pokemonSystem.trainPokemon(samplePokemon, trainingType)
+      const result = pokemonSystem.trainPokemon(pokemonForSystem, trainingType)
       
       const canAfford = this.checkCanAfford(result.cost)
       if (!canAfford) {
@@ -459,6 +733,54 @@ export class GameController {
         return {
           success: false,
           message: '支払い処理に失敗しました'
+        }
+      }
+      
+      // データベースに保存
+      if (this.userId && supabase) {
+        try {
+          const updateData: any = {
+            experience: (pokemon.experience || 0) + result.experienceGained,
+            updated_at: new Date().toISOString()
+          }
+          
+          if (result.levelUp) {
+            updateData.level = result.newLevel
+            // レベルアップ時はHPも計算し直し（簡易版）
+            updateData.max_hp = Math.floor(pokemon.max_hp * 1.1)
+          }
+          
+          const { error: pokemonError } = await supabase
+            .from('pokemon')
+            .update(updateData)
+            .eq('id', pokemonId)
+            .eq('user_id', this.userId)
+          
+          if (pokemonError) {
+            console.error('特訓データ保存エラー:', pokemonError)
+          } else {
+            console.log('✅ 特訓データが保存されました')
+          }
+          
+          // 取引記録をデータベースに保存
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: this.userId,
+              type: 'expense',
+              category: 'maintenance',
+              amount: result.cost,
+              description: `ポケモン特訓 (${trainingType})`,
+              reference_id: pokemonId,
+              created_at: new Date().toISOString()
+            })
+          
+          if (transactionError) {
+            console.error('特訓取引記録エラー:', transactionError)
+          }
+          
+        } catch (dbError) {
+          console.error('特訓データベース保存エラー:', dbError)
         }
       }
       
@@ -589,6 +911,31 @@ export class GameController {
       throw new Error('パーティは最大6体までです')
     }
     
+    // データベースに保存
+    if (this.userId && supabase) {
+      try {
+        const { error: pokemonError } = await supabase
+          .from('pokemon')
+          .update({
+            status: 'in_party',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', pokemonId)
+          .eq('user_id', this.userId)
+        
+        if (pokemonError) {
+          console.error('パーティ追加データベースエラー:', pokemonError)
+          return false
+        } else {
+          console.log('✅ ポケモンをパーティに追加しました')
+        }
+        
+      } catch (dbError) {
+        console.error('パーティ追加データベース保存エラー:', dbError)
+        return false
+      }
+    }
+    
     // 実際の実装では、データベースからポケモンを取得
     // ここでは簡易版
     const pokemon = {
@@ -605,6 +952,31 @@ export class GameController {
     const index = this.party.findIndex(p => p.id === pokemonId)
     if (index === -1) {
       throw new Error('指定されたポケモンはパーティにいません')
+    }
+    
+    // データベースに保存
+    if (this.userId && supabase) {
+      try {
+        const { error: pokemonError } = await supabase
+          .from('pokemon')
+          .update({
+            status: 'available',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', pokemonId)
+          .eq('user_id', this.userId)
+        
+        if (pokemonError) {
+          console.error('パーティ削除データベースエラー:', pokemonError)
+          return false
+        } else {
+          console.log('✅ ポケモンをパーティから削除しました')
+        }
+        
+      } catch (dbError) {
+        console.error('パーティ削除データベース保存エラー:', dbError)
+        return false
+      }
     }
     
     this.party.splice(index, 1)
@@ -633,7 +1005,172 @@ export class GameController {
     }
   }
   
+  // データベースからポケモンデータを取得
+  private async getPokemonById(pokemonId: string): Promise<any | null> {
+    if (!this.userId || !supabase) return null
+    
+    try {
+      const { data, error } = await supabase
+        .from('pokemon')
+        .select('*')
+        .eq('id', pokemonId)
+        .eq('user_id', this.userId)
+        .single()
+      
+      if (error) {
+        console.error('ポケモンデータ取得エラー:', error)
+        return null
+      }
+      
+      return data
+    } catch (error) {
+      console.error('ポケモンデータ取得エラー:', error)
+      return null
+    }
+  }
+  
+  // 研究機能
+  async startResearch(projectId: string, cost: number): Promise<{
+    success: boolean
+    message: string
+    cost?: number
+  }> {
+    try {
+      // 資金チェック
+      const canAfford = this.checkCanAfford(cost)
+      if (!canAfford) {
+        return {
+          success: false,
+          message: `資金が不足しています。必要: ₽${cost.toLocaleString()}`
+        }
+      }
+      
+      // 研究費用の支払い
+      const paymentResult = this.recordTransaction(
+        'expense',
+        'research',
+        cost,
+        `研究プロジェクト: ${projectId}`
+      )
+      
+      if (!paymentResult) {
+        return {
+          success: false,
+          message: '研究費用の支払いに失敗しました'
+        }
+      }
+      
+      // データベースに保存
+      if (this.userId && supabase) {
+        try {
+          const { error: researchError } = await supabase
+            .from('research_projects')
+            .insert({
+              user_id: this.userId,
+              project_id: projectId,
+              research_points: 0,
+              status: 'researching',
+              started_at: new Date().toISOString()
+            })
+          
+          if (researchError) {
+            console.error('研究プロジェクト保存エラー:', researchError)
+          } else {
+            console.log('✅ 研究プロジェクトが開始されました')
+          }
+          
+          // 取引記録をデータベースに保存
+          const { error: transactionError } = await supabase
+            .from('transactions')
+            .insert({
+              user_id: this.userId,
+              type: 'expense',
+              category: 'research',
+              amount: cost,
+              description: `研究プロジェクト: ${projectId}`,
+              reference_id: projectId,
+              created_at: new Date().toISOString()
+            })
+          
+          if (transactionError) {
+            console.error('研究取引記録エラー:', transactionError)
+          }
+          
+        } catch (dbError) {
+          console.error('研究データベース保存エラー:', dbError)
+        }
+      }
+      
+      return {
+        success: true,
+        message: '研究を開始しました！',
+        cost
+      }
+      
+    } catch (error) {
+      console.error('研究開始エラー:', error)
+      return {
+        success: false,
+        message: '研究開始に失敗しました'
+      }
+    }
+  }
+  
   // ゲーム完全リセット
+  /**
+   * ゲーム進行状況とバランスデータを保存
+   * トレーナー雇用などの重要なアクション後に呼び出される
+   */
+  private async saveGameState(): Promise<void> {
+    if (!this.userId || !supabase) return
+    
+    try {
+      // ゲーム進行状況を更新
+      const { error: progressError } = await supabase
+        .from('game_progress')
+        .upsert({
+          user_id: this.userId,
+          level: 1, // 基本レベル
+          experience: 0,
+          next_level_exp: 1000,
+          total_play_time: 0,
+          achievement_points: 0,
+          unlocked_features: ['basic_training', 'pokemon_management', 'simple_expeditions'],
+          difficulty: 'normal',
+          updated_at: new Date().toISOString()
+        })
+      
+      if (progressError) {
+        console.error('ゲーム進行状況保存エラー:', progressError)
+      } else {
+        console.log('✅ ゲーム進行状況が保存されました')
+      }
+      
+      // ゲームバランスを更新
+      const { error: balanceError } = await supabase
+        .from('game_balance')
+        .upsert({
+          user_id: this.userId,
+          trainer_growth_rate: 1.0,
+          pokemon_growth_rate: 1.0,
+          expedition_difficulty: 1.0,
+          economy_inflation: 1.0,
+          research_speed: 1.0,
+          facility_efficiency: 1.0,
+          updated_at: new Date().toISOString()
+        })
+      
+      if (balanceError) {
+        console.error('ゲームバランス保存エラー:', balanceError)
+      } else {
+        console.log('✅ ゲームバランスが保存されました')
+      }
+      
+    } catch (error) {
+      console.error('ゲーム状態保存エラー:', error)
+    }
+  }
+  
   resetGame() {
     this.economySystem.setCurrentMoney(50000) // 初期資金
     this.soundSystem.stopAll()

@@ -40,7 +40,7 @@ export interface TrainerPersonality {
   compliance: number      // アドバイス遵守 (-10 ～ +10)
 }
 
-export type TrainerJob = 'ranger' | 'explorer' | 'researcher' | 'battler' | 'coordinator'
+export type TrainerJob = 'ranger' | 'breeder' | 'researcher' | 'battler' | 'medic'
 
 export interface LevelUpResult {
   newLevel: number
@@ -96,13 +96,13 @@ export class TrainerSystem {
       research: 0.8,
       leadership: 1.1
     },
-    explorer: {
-      pokemon_handling: 1.0,
-      navigation: 1.5,
-      survival: 1.5,
+    breeder: {
+      pokemon_handling: 1.5,
+      navigation: 1.0,
+      survival: 1.2,
       battle_tactics: 0.8,
-      research: 1.2,
-      leadership: 0.9
+      research: 1.1,
+      leadership: 1.1
     },
     researcher: {
       pokemon_handling: 1.2,
@@ -120,13 +120,13 @@ export class TrainerSystem {
       research: 0.6,
       leadership: 1.2
     },
-    coordinator: {
-      pokemon_handling: 1.3,
-      navigation: 1.1,
-      survival: 0.9,
-      battle_tactics: 1.1,
-      research: 1.0,
-      leadership: 1.4
+    medic: {
+      pokemon_handling: 1.2,
+      navigation: 1.0,
+      survival: 1.3,
+      battle_tactics: 0.7,
+      research: 1.2,
+      leadership: 1.3
     }
   }
 
@@ -383,10 +383,10 @@ export class TrainerSystem {
   private static calculateBaseSalary(job: TrainerJob, level: number): number {
     const baseSalaries: Record<TrainerJob, number> = {
       ranger: 25000,
-      explorer: 28000,
+      breeder: 28000,
       researcher: 30000,
       battler: 27000,
-      coordinator: 32000
+      medic: 32000
     }
     
     return baseSalaries[job] + (level * 2000)
@@ -450,13 +450,13 @@ export class TrainerSystem {
     
     const jobInfo: Record<TrainerJob, { nameJa: string; specialty: string }> = {
       ranger: { nameJa: 'レンジャー', specialty: '捕獲特化' },
-      explorer: { nameJa: 'エクスプローラー', specialty: '探索特化' },
+      breeder: { nameJa: 'ブリーダー', specialty: '育成特化' },
       researcher: { nameJa: 'リサーチャー', specialty: '発見特化' },
       battler: { nameJa: 'バトラー', specialty: '戦闘特化' },
-      coordinator: { nameJa: 'コーディネーター', specialty: '総合特化' }
+      medic: { nameJa: 'メディック', specialty: '治療特化' }
     }
     
-    const jobs: TrainerJob[] = ['ranger', 'explorer', 'researcher', 'battler', 'coordinator']
+    const jobs: TrainerJob[] = ['ranger', 'breeder', 'researcher', 'battler', 'medic']
     const candidates = []
     
     for (let i = 0; i < Math.min(candidateNames.length, 6); i++) {
