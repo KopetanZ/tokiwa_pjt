@@ -4,6 +4,7 @@ import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { TrainerCard } from '@/components/trainers/TrainerCard'
+import { TrainerDetailModal } from '@/components/trainers/TrainerDetailModal'
 import { TrainerSummary } from '@/types/trainer'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState, useEffect } from 'react'
@@ -82,23 +83,25 @@ export default function TrainersPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
   const [showHiringModal, setShowHiringModal] = useState(false)
   const [availableCandidates, setAvailableCandidates] = useState<any[]>([])
+  const [selectedTrainer, setSelectedTrainer] = useState<TrainerSummary | null>(null)
+  const [showDetailModal, setShowDetailModal] = useState(false)
   
   const { isMockMode } = useAuth()
   const gameData = useGameData()
   const { addNotification } = useNotifications()
   
   // 雇用候補者データの読み込み
-  useEffect(() => {
-    const loadCandidates = async () => {
-      try {
-        const { gameController } = await import('@/lib/game-logic')
-        const candidates = gameController.getAvailableTrainerCandidates()
-        setAvailableCandidates(candidates)
-      } catch (error) {
-        console.error('候補者データ読み込みエラー:', error)
-      }
+  const loadCandidates = async () => {
+    try {
+      const { gameController } = await import('@/lib/game-logic')
+      const candidates = gameController.getAvailableTrainerCandidates()
+      setAvailableCandidates(candidates)
+    } catch (error) {
+      console.error('候補者データ読み込みエラー:', error)
     }
-    
+  }
+
+  useEffect(() => {
     loadCandidates()
   }, [])
   
@@ -161,7 +164,8 @@ export default function TrainersPage() {
         })
         
         // 画面更新のためのトレーナーリスト再読み込み
-        window.location.reload() // 簡易的な更新
+        // トレーナーデータを再取得
+        await loadCandidates()
       } else {
         console.warn('❌ 雇用失敗:', result.message)
         addNotification({
@@ -178,6 +182,24 @@ export default function TrainersPage() {
     }
   }
 
+  const handleTrainerClick = (trainer: TrainerSummary) => {
+    setSelectedTrainer(trainer)
+    setShowDetailModal(true)
+  }
+
+  const handleCloseDetailModal = () => {
+    setShowDetailModal(false)
+    setSelectedTrainer(null)
+  }
+
+  const handleNewTrainerHire = () => {
+    setShowHiringModal(true)
+    addNotification({
+      type: 'info',
+      message: '雇用可能なトレーナーリストを表示します'
+    })
+  }
+
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
@@ -185,7 +207,7 @@ export default function TrainersPage() {
         <h1 className="font-pixel-large text-retro-gb-dark">
           トレーナー管理
         </h1>
-        <PixelButton>
+        <PixelButton onClick={handleNewTrainerHire}>
           新しいトレーナーを雇う
         </PixelButton>
       </div>
@@ -247,7 +269,7 @@ export default function TrainersPage() {
           <TrainerCard 
             key={trainer.id}
             trainer={trainer}
-            onClick={() => {/* 詳細画面へ */}}
+            onClick={() => handleTrainerClick(trainer)}
             showStatus={true}
             showParty={true}
           />
@@ -298,6 +320,15 @@ export default function TrainersPage() {
           </div>
         </div>
       </PixelCard>
+
+      {/* トレーナー詳細モーダル */}
+      {selectedTrainer && (
+        <TrainerDetailModal
+          trainer={selectedTrainer}
+          isOpen={showDetailModal}
+          onClose={handleCloseDetailModal}
+        />
+      )}
     </div>
   )
 }

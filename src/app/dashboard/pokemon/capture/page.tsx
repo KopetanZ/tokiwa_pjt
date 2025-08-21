@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
@@ -63,10 +64,13 @@ function WildPokemonCard({ pokemon }: { pokemon: WildPokemon }) {
         <div className="relative">
           <div className="w-24 h-24 bg-retro-gb-light border border-retro-gb-mid flex items-center justify-center">
             {pokemon.species.sprite ? (
-              <img 
+              <Image 
                 src={pokemon.species.sprite}
                 alt={pokemon.species.name}
-                className="w-20 h-20 pixel-art"
+                width={80}
+                height={80}
+                className="pixel-art"
+                unoptimized
               />
             ) : (
               <span className="font-pixel text-xs">No.{pokemon.species.id}</span>

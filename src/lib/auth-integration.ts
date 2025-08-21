@@ -445,9 +445,9 @@ export class AuthSessionManager {
     const authError = mapSupabaseError(error, {
       operation: context,
       table: 'auth'
-    }, this.sessionState.user)
+    })
 
-    ErrorLogger.getInstance().logError(authError)
+    ErrorLogger.getInstance().log(authError)
   }
 
   // パブリックメソッド: サインイン

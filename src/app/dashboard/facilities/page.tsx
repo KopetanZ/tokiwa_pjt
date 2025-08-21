@@ -92,6 +92,83 @@ export default function FacilitiesPage() {
     }
   }
 
+  const handleStartConstruction = async (facilityId: string) => {
+    try {
+      const facility = facilitySystem.getFacility(facilityId)
+      if (!facility) {
+        addNotification({
+          type: 'error',
+          message: '施設が見つかりません'
+        })
+        return
+      }
+
+      // 建設費用の確認
+      const constructionCost = facility.upgradeCost
+      const { gameController } = await import('@/lib/game-logic')
+      const canAfford = gameController.checkCanAfford(constructionCost)
+      
+      if (!canAfford) {
+        addNotification({
+          type: 'error',
+          message: `資金が不足しています。必要: ₽${constructionCost.toLocaleString()}`
+        })
+        return
+      }
+
+      // 建設費用の支払い
+      const paymentResult = gameController.recordTransaction(
+        'expense',
+        'facility',
+        constructionCost,
+        `${facility.name}建設費`
+      )
+      
+      if (paymentResult) {
+        // 施設をレベル1に設定（建設開始）
+        facilitySystem.debugSetFacilityLevel(facilityId, 1)
+        
+        addNotification({
+          type: 'success',
+          message: `${facility.name}の建設を開始しました！（費用: ₽${constructionCost.toLocaleString()}）`
+        })
+        loadFacilityData()
+      } else {
+        addNotification({
+          type: 'error',
+          message: '建設費の支払いに失敗しました'
+        })
+      }
+    } catch (error) {
+      console.error('建設開始エラー:', error)
+      addNotification({
+        type: 'error',
+        message: '建設開始に失敗しました'
+      })
+    }
+  }
+
+  const handleNewConstruction = () => {
+    // 建設可能な施設リストを表示
+    const unlockedButNotBuilt = facilities.filter(f => f.isUnlocked && f.level === 0)
+    const lockedFacilities = facilities.filter(f => !f.isUnlocked)
+    
+    if (unlockedButNotBuilt.length === 0 && lockedFacilities.length === 0) {
+      addNotification({
+        type: 'info',
+        message: '建設可能な新しい施設はありません'
+      })
+      return
+    }
+
+    // 建設可能施設の一覧を表示するタブに切り替え
+    setSelectedTab('facilities')
+    addNotification({
+      type: 'info',
+      message: '施設一覧で建設可能な施設を確認してください'
+    })
+  }
+
   const handleStartResearch = async (projectId: string) => {
     try {
       // 研究開始の実装
@@ -189,10 +266,20 @@ export default function FacilitiesPage() {
           施設管理
         </h1>
         <div className="flex space-x-2">
-          <PixelButton size="sm" variant="secondary">
+          <PixelButton 
+            size="sm" 
+            variant="secondary"
+            onClick={() => {
+              addNotification({
+                type: 'info',
+                message: '施設レポート画面に移動します'
+              })
+              // TODO: 施設レポート画面の実装
+            }}
+          >
             施設レポート
           </PixelButton>
-          <PixelButton>
+          <PixelButton onClick={handleNewConstruction}>
             新規建設
           </PixelButton>
         </div>
@@ -452,9 +539,22 @@ export default function FacilitiesPage() {
                         {formatMoney(facility.upgradeCost * Math.pow(1.5, facility.level))}
                       </PixelButton>
                     )}
-                    {facility.level === 0 && (
-                      <PixelButton size="sm" variant="secondary">
+                    {facility.level === 0 && facility.isUnlocked && (
+                      <PixelButton 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={() => handleStartConstruction(facility.id)}
+                      >
                         建設開始
+                      </PixelButton>
+                    )}
+                    {!facility.isUnlocked && (
+                      <PixelButton 
+                        size="sm" 
+                        variant="secondary"
+                        onClick={() => handleUnlockFacility(facility.id)}
+                      >
+                        ロック解除
                       </PixelButton>
                     )}
                   </div>

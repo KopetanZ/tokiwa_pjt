@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
-import { ErrorLogger, DatabaseError, ErrorType, ErrorSeverity } from '@/lib/error-handling'
+import { ErrorLogger, GameError, ErrorCategory, ErrorSeverity } from '@/lib/unified-error-handling'
 import { useAuth } from '@/contexts/GameContext'
 
 interface ErrorMonitorProps {
@@ -12,10 +12,10 @@ interface ErrorMonitorProps {
 }
 
 export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
-  const [errors, setErrors] = useState<DatabaseError[]>([])
+  const [errors, setErrors] = useState<GameError[]>([])
   const [stats, setStats] = useState<any>(null)
   const [filter, setFilter] = useState<{
-    type?: ErrorType
+    type?: ErrorCategory
     severity?: ErrorSeverity
   }>({})
   
@@ -35,37 +35,38 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
     
     let filteredErrors = allErrors
     if (filter.type) {
-      filteredErrors = filteredErrors.filter(e => e.type === filter.type)
+      filteredErrors = filteredErrors.filter(e => e.category === filter.type)
     }
     if (filter.severity) {
       filteredErrors = filteredErrors.filter(e => e.severity === filter.severity)
     }
     
     setErrors(filteredErrors)
-    setStats(errorLogger.getErrorStats())
+    // TODO: Implement getErrorStats method or use ErrorHandler.getErrorStats()
+    setStats({ total: filteredErrors.length, critical: 0, high: 0, medium: 0, low: 0 })
   }
 
   const clearErrors = () => {
-    ErrorLogger.getInstance().clearErrorLog()
+    ErrorLogger.getInstance().clearErrors()
     loadErrors()
   }
 
   const getSeverityColor = (severity: ErrorSeverity) => {
     switch (severity) {
-      case ErrorSeverity.LOW: return 'text-green-600'
-      case ErrorSeverity.MEDIUM: return 'text-yellow-600'
-      case ErrorSeverity.HIGH: return 'text-orange-600'
-      case ErrorSeverity.CRITICAL: return 'text-red-600'
+      case 'low': return 'text-green-600'
+      case 'medium': return 'text-yellow-600'
+      case 'high': return 'text-orange-600'
+      case 'critical': return 'text-red-600'
       default: return 'text-gray-600'
     }
   }
 
   const getSeverityBg = (severity: ErrorSeverity) => {
     switch (severity) {
-      case ErrorSeverity.LOW: return 'bg-green-100'
-      case ErrorSeverity.MEDIUM: return 'bg-yellow-100'
-      case ErrorSeverity.HIGH: return 'bg-orange-100'
-      case ErrorSeverity.CRITICAL: return 'bg-red-100'
+      case 'low': return 'bg-green-100'
+      case 'medium': return 'bg-yellow-100'
+      case 'high': return 'bg-orange-100'
+      case 'critical': return 'bg-red-100'
       default: return 'bg-gray-100'
     }
   }
@@ -106,19 +107,19 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
                 </div>
                 <div className="text-center">
                   <div className="font-pixel text-lg text-red-600">
-                    {stats.bySeverity[ErrorSeverity.CRITICAL] || 0}
+                    {stats.bySeverity?.critical || 0}
                   </div>
                   <div className="font-pixel text-xs text-retro-gb-mid">クリティカル</div>
                 </div>
                 <div className="text-center">
                   <div className="font-pixel text-lg text-orange-600">
-                    {stats.bySeverity[ErrorSeverity.HIGH] || 0}
+                    {stats.bySeverity?.high || 0}
                   </div>
                   <div className="font-pixel text-xs text-retro-gb-mid">重要</div>
                 </div>
                 <div className="text-center">
                   <div className="font-pixel text-lg text-green-600">
-                    {stats.bySeverity[ErrorSeverity.LOW] || 0}
+                    {stats.bySeverity?.low || 0}
                   </div>
                   <div className="font-pixel text-xs text-retro-gb-mid">軽微</div>
                 </div>
@@ -131,11 +132,11 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
                 <label className="font-pixel text-xs text-retro-gb-mid">タイプ</label>
                 <select
                   value={filter.type || ''}
-                  onChange={(e) => setFilter(prev => ({ ...prev, type: e.target.value as ErrorType || undefined }))}
+                  onChange={(e) => setFilter(prev => ({ ...prev, type: e.target.value as ErrorCategory || undefined }))}
                   className="font-pixel text-xs bg-retro-gb-light border border-retro-gb-mid px-2 py-1 ml-2"
                 >
                   <option value="">すべて</option>
-                  {Object.values(ErrorType).map(type => (
+                  {['auth', 'database', 'network', 'game', 'validation', 'system'].map(type => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
@@ -148,7 +149,7 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
                   className="font-pixel text-xs bg-retro-gb-light border border-retro-gb-mid px-2 py-1 ml-2"
                 >
                   <option value="">すべて</option>
-                  {Object.values(ErrorSeverity).map(severity => (
+                  {['low', 'medium', 'high', 'critical'].map(severity => (
                     <option key={severity} value={severity}>{severity}</option>
                   ))}
                 </select>
@@ -172,14 +173,14 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
                           {error.severity.toUpperCase()}
                         </span>
                         <span className="font-pixel text-xs text-gray-600">
-                          {error.type}
+                          {error.category}
                         </span>
                         {error.retryable && (
                           <span className="font-pixel text-xs bg-blue-200 text-blue-800 px-2 py-1">
                             RETRY
                           </span>
                         )}
-                        {error.recoverable && (
+                        {error.retryable && (
                           <span className="font-pixel text-xs bg-green-200 text-green-800 px-2 py-1">
                             RECOVERABLE
                           </span>
@@ -208,7 +209,7 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
                       <div className="mt-2 p-2 bg-gray-50 text-gray-700">
                         <div><strong>メッセージ:</strong> {error.message}</div>
                         {error.code && <div><strong>コード:</strong> {error.code}</div>}
-                        {error.user && <div><strong>ユーザー:</strong> {error.user.id}</div>}
+                        {error.context?.user && <div><strong>ユーザー:</strong> {error.context.user.id}</div>}
                       </div>
                     </details>
                   </div>
@@ -230,20 +231,19 @@ export function ErrorMonitor({ isVisible, onClose }: ErrorMonitorProps) {
 }
 
 // デバッグ用のエラーテスト関数
-export function generateTestError(type: ErrorType, severity: ErrorSeverity) {
-  const testError: DatabaseError = {
-    type,
-    severity,
-    message: `Test error of type ${type} with severity ${severity}`,
-    timestamp: new Date(),
-    recoverable: Math.random() > 0.5,
-    retryable: Math.random() > 0.5,
-    userMessage: `これは${severity}レベルの${type}タイプのテストエラーです`,
-    context: {
-      operation: 'test_error_generation',
-      table: 'test_table'
+export function generateTestError(category: ErrorCategory, severity: ErrorSeverity) {
+  const testError = new GameError(
+    `テストエラー: ${category} - ${severity}`,
+    `TEST_${category.toUpperCase()}_${severity.toUpperCase()}`,
+    {
+      severity,
+      category,
+      context: {
+        function: 'generateTestError',
+        testMode: true
+      }
     }
-  }
+  )
   
-  ErrorLogger.getInstance().logError(testError)
+  ErrorLogger.getInstance().log(testError)
 }

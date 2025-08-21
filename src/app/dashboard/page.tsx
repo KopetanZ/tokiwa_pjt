@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth, useGameData, useNotifications } from '@/contexts/GameContext'
 import { PixelCard } from '@/components/ui/PixelCard'
@@ -100,8 +100,32 @@ export default function DashboardPage() {
     router.push('/dashboard/analytics')
   }
 
+  // 緊急イベントタイマー
+  const startEmergencyTimer = useCallback(() => {
+    if (emergencyTimer) {
+      clearInterval(emergencyTimer)
+    }
+    
+    const timer = setInterval(() => {
+      setEmergencyEvent(prev => {
+        if (!prev || prev.timeLeft <= 1) {
+          setShowEmergency(false)
+          addNotification({
+            type: 'warning',
+            message: '⏰ 緊急イベントの時間切れです'
+          })
+          clearInterval(timer)
+          return null
+        }
+        return { ...prev, timeLeft: prev.timeLeft - 1 }
+      })
+    }, 1000)
+    
+    setEmergencyTimer(timer)
+  }, [emergencyTimer, addNotification])
+
   // 緊急イベント生成
-  const generateEmergencyEvent = () => {
+  const generateEmergencyEvent = useCallback(() => {
     const pokemonList = ['ピカチュウ', 'イーブイ', 'ヒトカゲ', 'フシギダネ', 'ゼニガメ', 'ピッピ']
     const trainerList = ['カスミ', 'タケシ', 'マチス', 'エリカ', 'ナツメ']
     const eventTypes: ('pokemon_encounter' | 'rare_item' | 'trainer_emergency' | 'weather_event')[] = ['pokemon_encounter', 'rare_item', 'trainer_emergency']
@@ -124,31 +148,7 @@ export default function DashboardPage() {
     
     // タイマー開始
     startEmergencyTimer()
-  }
-
-  // 緊急イベントタイマー
-  const startEmergencyTimer = () => {
-    if (emergencyTimer) {
-      clearInterval(emergencyTimer)
-    }
-    
-    const timer = setInterval(() => {
-      setEmergencyEvent(prev => {
-        if (!prev || prev.timeLeft <= 1) {
-          setShowEmergency(false)
-          addNotification({
-            type: 'warning',
-            message: '⏰ 緊急イベントの時間切れです'
-          })
-          clearInterval(timer)
-          return null
-        }
-        return { ...prev, timeLeft: prev.timeLeft - 1 }
-      })
-    }, 1000)
-    
-    setEmergencyTimer(timer)
-  }
+  }, [startEmergencyTimer])
 
   // コンポーネントマウント時とクリーンアップ
   useEffect(() => {
@@ -271,7 +271,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
           <div className="font-pixel text-retro-gb-dark">ユーザー情報が見つかりません</div>
-          <PixelButton onClick={() => window.location.href = '/'}>
+          <PixelButton onClick={() => router.push('/')}>
             ホームに戻る
           </PixelButton>
         </div>
@@ -290,7 +290,7 @@ export default function DashboardPage() {
           <div className="font-pixel text-xs text-retro-gb-mid">
             認証なしでゲームをテストできます
           </div>
-          <PixelButton onClick={() => window.location.href = '/'}>
+          <PixelButton onClick={() => router.push('/')}>
             ホームに戻ってクイックスタート
           </PixelButton>
         </div>

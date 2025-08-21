@@ -9,7 +9,7 @@ import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { getUserExpeditions, startRealExpedition } from '@/lib/expedition-integration'
 import { getSafeGameData } from '@/lib/data-utils'
 import { gameController, EXPEDITION_LOCATIONS } from '@/lib/game-logic'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 // サンプルデータ（モックIDと整合性を保つ）
 const sampleActiveExpeditions = [
@@ -101,7 +101,7 @@ export default function ExpeditionsPage() {
     }
     
     loadRealExpeditionData()
-  }, [isMockMode, isAuthenticated, user])
+  }, [isMockMode, isAuthenticated, user, addNotification])
   
   // 実際のゲームデータまたはサンプルデータを使用
   const expeditions = isMockMode 

@@ -15,7 +15,6 @@ export {
   executeWithRetry,
   createErrorHandler,
   type ErrorCode,
-  type ErrorSeverity,
   type ErrorCategory,
 } from './unified-error-handling'
 

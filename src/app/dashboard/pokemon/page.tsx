@@ -9,6 +9,7 @@ import { PokemonDetailModal } from '@/components/pokemon/PokemonDetailModal'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { gameController } from '@/lib/game-logic'
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 // Pokemon interface for this page (simplified)
 interface SimplePokemon {
@@ -131,6 +132,7 @@ export default function PokemonPage() {
   const { isMockMode } = useAuth()
   const gameData = useGameData()
   const { addNotification } = useNotifications()
+  const router = useRouter()
   
   // 実際のゲームデータまたはサンプルデータを使用
   // モックデータを表示用の構造に変換
@@ -347,12 +349,12 @@ export default function PokemonPage() {
           <PixelButton 
             size="sm" 
             variant="secondary"
-            onClick={() => window.location.href = '/dashboard/pokemon/pokedex'}
+            onClick={() => router.push('/dashboard/pokemon/pokedex')}
           >
             ポケモン図鑑
           </PixelButton>
           <PixelButton
-            onClick={() => window.location.href = '/dashboard/pokemon/capture'}
+            onClick={() => router.push('/dashboard/pokemon/capture')}
           >
             野生ポケモン捕獲
           </PixelButton>

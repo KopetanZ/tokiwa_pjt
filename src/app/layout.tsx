@@ -1,9 +1,16 @@
 import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
+import { Press_Start_2P } from 'next/font/google'
 import './globals.css'
 import { Providers } from '@/components/providers'
 
 const inter = Inter({ subsets: ['latin'] })
+const pressStart2P = Press_Start_2P({ 
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-pixel',
+  display: 'swap'
+})
 
 export const metadata: Metadata = {
   title: 'トキワシティ訓練所',
@@ -25,13 +32,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ja" suppressHydrationWarning>
-      <head>
-        <link 
-          href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" 
-          rel="stylesheet" 
-        />
-      </head>
-      <body className={`${inter.className} font-pixel bg-retro-gb-lightest text-retro-gb-dark`}>
+      <body className={`${inter.className} ${pressStart2P.variable} font-pixel bg-retro-gb-lightest text-retro-gb-dark`}>
         <Providers>
           <div className="gameboy-container min-h-screen">
             {children}

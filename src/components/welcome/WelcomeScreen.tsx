@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuth } from '@/components/providers/AuthProvider'
@@ -15,6 +16,7 @@ export function WelcomeScreen() {
   const { user, isAuthenticated, isLoading: authLoading, login, authMethod } = useAuth()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
+  const router = useRouter()
 
   console.log('🎮 WelcomeScreen: レンダリング', { isAuthenticated, isLoading: authLoading, user, isDevelopment })
 
@@ -93,7 +95,7 @@ export function WelcomeScreen() {
       console.log(`${schoolName}へようこそ、${guestName}館長！`)
       // ダッシュボードにリダイレクト
       console.log('🎮 WelcomeScreen: ダッシュボードにリダイレクト')
-      window.location.href = '/dashboard'
+      router.push('/dashboard')
     } catch (error) {
       console.error('🎮 WelcomeScreen: ログイン失敗', error)
       setError('ログインに失敗しました')
@@ -105,7 +107,7 @@ export function WelcomeScreen() {
   // 開発環境用クイックスタート
   const handleQuickStart = () => {
     console.log('🎮 WelcomeScreen: 開発環境クイックスタート')
-    window.location.href = '/dashboard'
+    router.push('/dashboard')
   }
 
   if (isAuthenticated) {

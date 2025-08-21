@@ -41,9 +41,9 @@ export function TrainerCard({
   return (
     <div 
       className={clsx(
-        'trainer-card',
-        onClick && 'trainer-card--clickable',
-        trainer.status === 'on_expedition' && 'trainer-card--busy'
+        'trainer-card bg-retro-gb-lightest border border-retro-gb-mid p-4',
+        onClick && 'cursor-pointer hover:bg-retro-gb-light',
+        trainer.status === 'on_expedition' && 'opacity-75'
       )}
       onClick={onClick}
     >

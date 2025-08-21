@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
@@ -90,10 +91,13 @@ function PokedexEntryCard({ entry }: { entry: PokedexEntry }) {
           <div className="text-center">
             <div className="w-24 h-24 bg-retro-gb-light border border-retro-gb-mid flex items-center justify-center">
               {entry.sprite ? (
-                <img 
+                <Image 
                   src={showShiny ? entry.shinySprite || entry.sprite : entry.sprite}
                   alt={entry.name}
-                  className="w-16 h-16 pixel-art"
+                  width={64}
+                  height={64}
+                  className="pixel-art"
+                  unoptimized
                 />
               ) : (
                 <span className="font-pixel text-xs text-retro-gb-mid">No Image</span>

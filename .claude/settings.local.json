@@ -16,7 +16,9 @@
       "Bash(git add:*)",
       "Bash(git rm:*)",
       "Bash(npm test:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm run lint:*)",
+      "Bash(touch:*)"
     ],
     "deny": [],
     "ask": [],

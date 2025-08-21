@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -50,15 +50,7 @@ export default function ExpeditionHistoryPage() {
   const [sortBy, setSortBy] = useState<string>('date')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadHistory()
-  }, [])
-
-  useEffect(() => {
-    applyFilters()
-  }, [history, searchTerm, filterStatus, filterTrainer, sortBy])
-
-  const loadHistory = async () => {
+  const loadHistory = useCallback(async () => {
     setLoading(true)
     try {
       // モックデータを生成
@@ -69,7 +61,7 @@ export default function ExpeditionHistoryPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const generateMockHistory = (): ExpeditionHistoryItem[] => {
     const locations = ['トキワの森', '22番道路', 'ニビジム', 'おつきみ山', 'ハナダの洞窟']
@@ -117,7 +109,7 @@ export default function ExpeditionHistoryPage() {
     })
   }
 
-  const applyFilters = () => {
+  const applyFilters = useCallback(() => {
     let filtered = [...history]
 
     // 検索フィルター
@@ -157,7 +149,15 @@ export default function ExpeditionHistoryPage() {
     })
 
     setFilteredHistory(filtered)
-  }
+  }, [history, searchTerm, filterStatus, filterTrainer, sortBy])
+
+  useEffect(() => {
+    loadHistory()
+  }, [loadHistory])
+
+  useEffect(() => {
+    applyFilters()
+  }, [applyFilters])
 
   const getUniqueTrainers = () => {
     return Array.from(new Set(history.map(item => item.trainerName)))

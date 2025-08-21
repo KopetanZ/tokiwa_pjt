@@ -437,6 +437,7 @@ export function useErrorHandler() {
 // 後方互換性のための関数
 export class ErrorLogger {
   private static instance: ErrorLogger | null = null
+  private errors: GameError[] = []
 
   static getInstance(): ErrorLogger {
     if (!this.instance) {
@@ -450,7 +451,16 @@ export class ErrorLogger {
   }
 
   log(error: GameError): void {
+    this.errors.push(error)
     ErrorHandler.handle(error)
+  }
+  
+  getRecentErrors(limit: number = 100): GameError[] {
+    return this.errors.slice(-limit)
+  }
+  
+  clearErrors(): void {
+    this.errors = []
   }
 }
 

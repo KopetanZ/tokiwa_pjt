@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/database'
-import { ErrorLogger, mapSupabaseError, createErrorHandler } from '@/lib/error-handling'
+import { ErrorLogger, ErrorHandler } from '@/lib/unified-error-handling'
 
 // 環境変数の存在チェック
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -45,14 +45,17 @@ const createEnhancedClient = (url: string, key: string) => {
 
     window.addEventListener('offline', () => {
       console.warn('ネットワーク接続が失われました')
-      ErrorLogger.getInstance().logError({
-        type: 'network' as any,
-        severity: 'high' as any,
-        message: 'Network connection lost',
-        timestamp: new Date(),
-        recoverable: true,
-        retryable: true,
-        userMessage: 'ネットワーク接続が失われました。接続を確認してください。'
+      import('./unified-error-handling').then(({ GameError, ErrorLogger }) => {
+        ErrorLogger.getInstance().log(new GameError(
+          'Network connection lost',
+          'NETWORK_ERROR',
+          {
+            severity: 'high',
+            category: 'system' as const,
+            context: { event: 'offline' },
+            retryable: true
+          }
+        ))
       })
     })
   }
@@ -99,8 +102,7 @@ export const safeSupabaseOperation = async <T>(
     const result = await operation()
     
     if (result.error) {
-      const handler = createErrorHandler(context)
-      const dbError = handler(result.error)
+      const dbError = ErrorHandler.handle(result.error, context)
       
       return {
         data: result.data,
@@ -116,8 +118,7 @@ export const safeSupabaseOperation = async <T>(
     }
     
   } catch (error) {
-    const handler = createErrorHandler(context)
-    const dbError = handler(error)
+    const dbError = ErrorHandler.handle(error, context)
     
     return {
       data: null,
@@ -141,9 +142,8 @@ export const monitorSupabaseConnection = () => {
       
       if (error) {
         console.warn('Supabase接続エラー:', error)
-        ErrorLogger.getInstance().logError(mapSupabaseError(error, {
-          operation: 'connection_check'
-        }))
+        const gameError = ErrorHandler.handle(error, { operation: 'connection_check' })
+        ErrorLogger.getInstance().log(gameError)
       }
     } catch (error) {
       console.warn('接続確認中にエラー:', error)
