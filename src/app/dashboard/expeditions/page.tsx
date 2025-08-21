@@ -5,6 +5,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { ExpeditionCard } from '@/components/expeditions/ExpeditionCard'
 import { LocationCard } from '@/components/expeditions/LocationCard'
+import { TrainerSelectionModal } from '@/components/expeditions/TrainerSelectionModal'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { getUserExpeditions, startRealExpedition } from '@/lib/expedition-integration'
 import { getSafeGameData } from '@/lib/data-utils'
@@ -72,6 +73,8 @@ export default function ExpeditionsPage() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'locations' | 'history'>('active')
   const [realExpeditionData, setRealExpeditionData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isTrainerModalOpen, setIsTrainerModalOpen] = useState(false)
+  const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null)
   
   const { isMockMode, user, isAuthenticated } = useAuth()
   const gameData = useGameData()
@@ -135,31 +138,37 @@ export default function ExpeditionsPage() {
     ).length
   }
   
-  const handleStartExpedition = async (locationId: number | string) => {
+  const handleStartExpedition = (locationId: number | string) => {
     console.log('🚀 派遣処理開始:', { locationId, isMockMode, availableTrainersCount: availableTrainers.length })
     
+    setSelectedLocationId(typeof locationId === 'string' ? parseInt(locationId) : locationId)
+    setIsTrainerModalOpen(true)
+  }
+
+  const handleConfirmExpedition = async (trainerId: string) => {
+    if (!selectedLocationId) return
+    
     setIsLoading(true)
+    setIsTrainerModalOpen(false)
     
     try {
       if (isMockMode) {
-        // 利用可能なトレーナーをチェック
-        if (!availableTrainers.length) {
+        // 選択されたトレーナーを取得
+        const selectedTrainer = availableTrainers.find((t: any) => t.id === trainerId)
+        if (!selectedTrainer) {
           addNotification({
             type: 'error',
-            message: '利用可能なトレーナーがいません'
+            message: 'トレーナーが見つかりません'
           })
           return
         }
         
-        // 最初の利用可能なトレーナーを選択
-        const selectedTrainer = availableTrainers[0]
         console.log('📋 選択されたトレーナー:', selectedTrainer)
         
         // ゲームロジックを使用した実際の派遣実行（モックモード）
-        const locationIdStr = typeof locationId === 'number' ? locationId.toString() : locationId
         const result = await gameController.executeExpedition({
           trainerId: selectedTrainer.id,
-          locationId: locationIdStr,
+          locationId: selectedLocationId.toString(),
           durationHours: 2,
           strategy: 'balanced',
           playerAdvice: []
@@ -187,27 +196,27 @@ export default function ExpeditionsPage() {
         return
       }
       
-      if (!user || !availableTrainers.length) {
+      if (!user) {
         addNotification({
           type: 'error',
-          message: '利用可能なトレーナーがいません'
+          message: 'ユーザー情報が見つかりません'
         })
         return
       }
       
-      const selectedTrainer = availableTrainers[0] // 簡単のため最初のトレーナーを選択
       const result = await startRealExpedition(
         user,
-        selectedTrainer.id,
-        typeof locationId === 'string' ? parseInt(locationId) : locationId,
+        trainerId,
+        selectedLocationId,
         'balanced',
         2 // 2時間の派遣
       )
       
       if (result.success) {
+        const selectedTrainer = availableTrainers.find((t: any) => t.id === trainerId)
         addNotification({
           type: 'success',
-          message: `${selectedTrainer.name}を派遣しました！`
+          message: `${selectedTrainer?.name || 'トレーナー'}を派遣しました！`
         })
         // データを再読み込み
         if (!isMockMode && isAuthenticated && user) {
@@ -228,6 +237,7 @@ export default function ExpeditionsPage() {
       })
     } finally {
       setIsLoading(false)
+      setSelectedLocationId(null)
     }
   }
   
@@ -240,6 +250,39 @@ export default function ExpeditionsPage() {
     // TODO: 実際の介入処理を実装
     console.log('介入処理:', { expeditionId })
   }
+
+  const handleShowDetails = (locationId: number) => {
+    const location = locations.find((loc: any) => loc.id === locationId)
+    if (location) {
+      addNotification({
+        type: 'info',
+        message: `${location.location_name_ja || location.nameJa}の詳細情報を表示`
+      })
+      console.log('詳細表示:', { locationId, location })
+    }
+  }
+
+  const handleExpeditionDetails = (expeditionId: string) => {
+    const expedition = expeditions.find((exp: any) => exp.id === expeditionId)
+    if (expedition) {
+      addNotification({
+        type: 'info',
+        message: `${expedition.trainer.name}の派遣詳細を表示`
+      })
+      console.log('派遣詳細表示:', { expeditionId, expedition })
+    }
+  }
+
+  const handleAutoDecision = (expeditionId: string) => {
+    addNotification({
+      type: 'info',
+      message: `派遣#${expeditionId}を自動判断モードに設定しました`
+    })
+    console.log('自動判断設定:', { expeditionId })
+  }
+
+  const selectedLocation = selectedLocationId ? 
+    locations.find((loc: any) => loc.id === selectedLocationId) : null
 
   return (
     <div className="space-y-6">
@@ -323,6 +366,8 @@ export default function ExpeditionsPage() {
                   })
                   console.log('呼び戻し処理:', { id })
                 }}
+                onShowDetails={handleExpeditionDetails}
+                onAutoDecision={handleAutoDecision}
                 disabled={isLoading}
               />
             ))
@@ -375,6 +420,7 @@ export default function ExpeditionsPage() {
                   backgroundImage: location.background_image || location.backgroundImage
                 }}
                 onStartExpedition={handleStartExpedition}
+                onShowDetails={handleShowDetails}
                 disabled={isLoading}
               />
             ))}
@@ -444,6 +490,19 @@ export default function ExpeditionsPage() {
           </div>
         </PixelCard>
       )}
+
+      {/* トレーナー選択モーダル */}
+      <TrainerSelectionModal
+        isOpen={isTrainerModalOpen}
+        onClose={() => {
+          setIsTrainerModalOpen(false)
+          setSelectedLocationId(null)
+        }}
+        onConfirm={handleConfirmExpedition}
+        trainers={availableTrainers}
+        locationName={selectedLocation?.location_name_ja || selectedLocation?.nameJa || ''}
+        disabled={isLoading}
+      />
     </div>
   )
 }

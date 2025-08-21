@@ -41,6 +41,22 @@ export class GameController {
   private soundSystem = soundSystem
   private userId: string | null = null
   
+  // ゲーム状態管理
+  private gameState: {
+    trainers: Array<{
+      id: string
+      name: string
+      job: string
+      level: number
+      experience: number
+      next_level_exp: number
+      specialty: string
+      status: 'available' | 'on_expedition' | 'training'
+    }>
+  } = {
+    trainers: []
+  }
+  
   /**
    * ゲームコントローラーを初期化
    * 全システムの初期化を実行し、ゲーム開始準備を行う
@@ -405,6 +421,7 @@ export class GameController {
       }
       
       // データベースに保存
+      let insertedTrainer = null
       if (this.userId && supabase) {
         try {
           // 職業IDを取得
@@ -415,7 +432,7 @@ export class GameController {
             .single()
           
           // トレーナーをデータベースに保存
-          const { error: trainerError } = await supabase
+          const { data: trainerData, error: trainerError } = await supabase
             .from('trainers')
             .insert({
               user_id: this.userId,
@@ -426,18 +443,25 @@ export class GameController {
               preferences: trainer.skills || {},
               compliance_rate: 80, // デフォルト値
               trust_level: 50, // デフォルト値
-              personality: trainer.personality || 'balanced',
+              personality: 'balanced', // 簡略化：詳細な性格はpreferencesに保存
               status: 'available',
               salary: trainer.salary_base,
               total_earned: 0,
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             })
+            .select()
+            .single()
           
           if (trainerError) {
             console.error('トレーナー保存エラー:', trainerError)
+            throw new Error(`トレーナー保存失敗: ${trainerError.message}`)
           } else {
-            console.log('✅ トレーナーがデータベースに保存されました')
+            insertedTrainer = trainerData
+            console.log('✅ トレーナーがデータベースに保存されました:', insertedTrainer)
+            
+            // ローカルゲーム状態にトレーナーを追加
+            this.addTrainerToLocalState(trainer, insertedTrainer.id)
           }
           
           // 取引記録をデータベースに保存
@@ -480,7 +504,8 @@ export class GameController {
         success: true,
         message: `${name}を雇用しました！`,
         trainer,
-        cost: hireCost
+        cost: hireCost,
+        dbData: insertedTrainer // データベース保存されたデータを含める
       }
       
     } catch (error) {
@@ -489,6 +514,31 @@ export class GameController {
         success: false,
         message: 'トレーナー雇用に失敗しました'
       }
+    }
+  }
+
+  // ローカル状態にトレーナーを追加
+  private addTrainerToLocalState(trainer: any, trainerId: string) {
+    const newTrainer = {
+      id: trainerId,
+      name: trainer.name,
+      job: trainer.job,
+      level: trainer.level,
+      experience: trainer.experience,
+      next_level_exp: trainer.next_level_exp || (trainer.level * 1000),
+      specialty: trainer.job, // 職業名をspecialtyとして使用
+      status: 'available' as const
+    }
+    
+    this.gameState.trainers.push(newTrainer)
+    console.log('✅ ローカル状態更新:', newTrainer)
+  }
+  
+  // ゲーム状態取得（外部アクセス用）
+  getGameState() {
+    return {
+      trainers: [...this.gameState.trainers], // 配列のコピーを返す
+      // 他の状態も今後追加可能
     }
   }
 
@@ -1146,11 +1196,10 @@ export class GameController {
     if (!this.userId || !supabase) return
     
     try {
-      // ゲーム進行状況を更新
+      // ゲーム進行状況を更新（UPDATEのみ）
       const { error: progressError } = await supabase
         .from('game_progress')
-        .upsert({
-          user_id: this.userId,
+        .update({
           level: 1, // 基本レベル
           experience: 0,
           next_level_exp: 1000,
@@ -1160,6 +1209,7 @@ export class GameController {
           difficulty: 'normal',
           updated_at: new Date().toISOString()
         })
+        .eq('user_id', this.userId)
       
       if (progressError) {
         console.error('ゲーム進行状況保存エラー:', progressError)
@@ -1167,11 +1217,10 @@ export class GameController {
         console.log('✅ ゲーム進行状況が保存されました')
       }
       
-      // ゲームバランスを更新
+      // ゲームバランスを更新（UPDATEのみ）
       const { error: balanceError } = await supabase
         .from('game_balance')
-        .upsert({
-          user_id: this.userId,
+        .update({
           trainer_growth_rate: 1.0,
           pokemon_growth_rate: 1.0,
           expedition_difficulty: 1.0,
@@ -1180,6 +1229,7 @@ export class GameController {
           facility_efficiency: 1.0,
           updated_at: new Date().toISOString()
         })
+        .eq('user_id', this.userId)
       
       if (balanceError) {
         console.error('ゲームバランス保存エラー:', balanceError)

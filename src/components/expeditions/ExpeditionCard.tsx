@@ -47,6 +47,8 @@ interface ExpeditionCardProps {
   expedition: ExpeditionSummary
   onIntervene: (expeditionId: string) => void
   onRecall: (expeditionId: string) => void
+  onShowDetails?: (expeditionId: string) => void
+  onAutoDecision?: (expeditionId: string) => void
   disabled?: boolean
 }
 
@@ -54,6 +56,8 @@ export function ExpeditionCard({
   expedition,
   onIntervene,
   onRecall,
+  onShowDetails,
+  onAutoDecision,
   disabled = false
 }: ExpeditionCardProps) {
   const [timeRemaining, setTimeRemaining] = useState('')
@@ -290,7 +294,12 @@ export function ExpeditionCard({
               >
                 介入する
               </PixelButton>
-              <PixelButton size="sm" variant="secondary">
+              <PixelButton 
+                size="sm" 
+                variant="secondary"
+                onClick={() => onAutoDecision?.(expedition.id)}
+                disabled={disabled}
+              >
                 自動判断
               </PixelButton>
             </div>
@@ -405,7 +414,12 @@ export function ExpeditionCard({
             >
               緊急呼び戻し
             </PixelButton>
-            <PixelButton size="sm" variant="secondary">
+            <PixelButton 
+              size="sm" 
+              variant="secondary"
+              onClick={() => onShowDetails?.(expedition.id)}
+              disabled={disabled}
+            >
               詳細表示
             </PixelButton>
           </div>

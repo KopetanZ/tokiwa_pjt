@@ -21,12 +21,14 @@ interface ExpeditionLocation {
 interface LocationCardProps {
   location: ExpeditionLocation
   onStartExpedition: (locationId: number) => void
+  onShowDetails?: (locationId: number) => void
   disabled?: boolean
 }
 
 export function LocationCard({
   location,
   onStartExpedition,
+  onShowDetails,
   disabled = false
 }: LocationCardProps) {
   const getRiskLabel = (riskLevel: number) => {
@@ -149,7 +151,12 @@ export function LocationCard({
               >
                 {disabled ? '処理中...' : '派遣開始'}
               </PixelButton>
-              <PixelButton variant="secondary" size="sm">
+              <PixelButton 
+                variant="secondary" 
+                size="sm"
+                onClick={() => onShowDetails?.(location.id)}
+                disabled={disabled}
+              >
                 詳細
               </PixelButton>
             </>

@@ -5,6 +5,7 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { TrainerCard } from '@/components/trainers/TrainerCard'
 import { TrainerDetailModal } from '@/components/trainers/TrainerDetailModal'
+import { CandidateSelectionModal } from '@/components/trainers/CandidateSelectionModal'
 import { TrainerSummary } from '@/types/trainer'
 import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
 import { useState, useEffect } from 'react'
@@ -81,7 +82,7 @@ const sampleTrainers: TrainerSummary[] = [
 
 export default function TrainersPage() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
-  const [showHiringModal, setShowHiringModal] = useState(false)
+  const [showCandidateModal, setShowCandidateModal] = useState(false)
   const [availableCandidates, setAvailableCandidates] = useState<any[]>([])
   const [selectedTrainer, setSelectedTrainer] = useState<TrainerSummary | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -105,10 +106,32 @@ export default function TrainersPage() {
     loadCandidates()
   }, [])
   
+  // ゲームコントローラーから最新のトレーナー状態を取得
+  const [localTrainers, setLocalTrainers] = useState<any[]>([])
+  
+  useEffect(() => {
+    // ゲームコントローラーから最新状態を取得
+    const getLatestTrainers = async () => {
+      try {
+        const { gameController } = await import('@/lib/game-logic')
+        const gameState = gameController.getGameState()
+        setLocalTrainers(gameState.trainers)
+      } catch (error) {
+        console.error('ゲーム状態取得エラー:', error)
+      }
+    }
+    
+    if (isMockMode) {
+      getLatestTrainers()
+    }
+  }, [isMockMode, availableCandidates]) // 雇用候補が変更されたときも更新
+  
   // 実際のゲームデータまたはサンプルデータを使用
   // モックデータを表示用の構造に変換
-  const trainers = isMockMode ? 
-    gameData.trainers.map(trainer => ({
+  const contextTrainers = isMockMode ? gameData.trainers : []
+  const allTrainers = isMockMode ? [...contextTrainers, ...localTrainers] : sampleTrainers
+  
+  const trainers = allTrainers.map(trainer => ({
       id: trainer.id,
       name: trainer.name,
       job: {
@@ -145,7 +168,8 @@ export default function TrainersPage() {
     totalSalary: trainers.reduce((sum, t) => sum + (t.salary || 0), 0)
   }
   
-  const handleHireTrainer = async (trainerName: string, job: string, cost: number) => {
+  const handleHireTrainer = async (candidate: any) => {
+    const { name: trainerName, job, hireCost: cost } = candidate
     console.log('🎯 雇用処理開始:', { trainerName, job, cost })
     
     try {
@@ -163,9 +187,23 @@ export default function TrainersPage() {
           message: `${trainerName}を雇用しました！（費用: ₽${result.cost?.toLocaleString()}）`
         })
         
-        // 画面更新のためのトレーナーリスト再読み込み
-        // トレーナーデータを再取得
-        await loadCandidates()
+        // 候補者リストから雇用したトレーナーを除外（即座にUI更新）
+        setAvailableCandidates(prev => 
+          prev.filter(c => c.name !== trainerName)
+        )
+        
+        console.log('✅ ローカル状態更新完了 - 新しいトレーナーはゲーム内で利用可能')
+        addNotification({
+          type: 'success',
+          message: `${trainerName}が派遣に利用可能になりました！`
+        })
+        
+        // バックグラウンドでデータベース保存状況を確認
+        if (result.dbData && result.dbData.id) {
+          console.log('✅ データベース保存も完了:', result.dbData.id)
+        } else {
+          console.warn('⚠️ データベース保存状況不明（ゲームプレイには影響なし）')
+        }
       } else {
         console.warn('❌ 雇用失敗:', result.message)
         addNotification({
@@ -193,7 +231,7 @@ export default function TrainersPage() {
   }
 
   const handleNewTrainerHire = () => {
-    setShowHiringModal(true)
+    setShowCandidateModal(true)
     addNotification({
       type: 'info',
       message: '雇用可能なトレーナーリストを表示します'
@@ -283,40 +321,13 @@ export default function TrainersPage() {
             新しいトレーナーを雇って、スクールを拡大しましょう
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {availableCandidates.map((candidate, index) => (
-              <div key={index} className="bg-retro-gb-light border border-retro-gb-mid p-3 space-y-2">
-                <div className="font-pixel text-xs text-retro-gb-dark">
-                  {candidate.name}
-                </div>
-                <div className="font-pixel text-xs text-retro-gb-mid">
-                  {candidate.jobNameJa} ({candidate.specialty})
-                </div>
-                <div className="font-pixel text-xs text-retro-gb-mid">
-                  Lv.{candidate.level} | 性格: {candidate.preview.personality}
-                </div>
-                <div className="font-pixel text-xs text-retro-gb-dark">
-                  雇用費: ₽{candidate.hireCost.toLocaleString()}
-                </div>
-                <div className="font-pixel text-xs text-retro-gb-mid">
-                  月給: ₽{candidate.preview.expectedSalary.toLocaleString()}
-                </div>
-                <PixelButton 
-                  size="sm" 
-                  className="w-full"
-                  onClick={() => handleHireTrainer(candidate.name, candidate.job, candidate.hireCost)}
-                >
-                  雇用する
-                </PixelButton>
-              </div>
-            ))}
-            {availableCandidates.length === 0 && (
-              <div className="col-span-full text-center py-4">
-                <div className="font-pixel text-xs text-retro-gb-mid">
-                  候補者を読み込み中...
-                </div>
-              </div>
-            )}
+          <div className="text-center py-4">
+            <div className="font-pixel text-sm text-retro-gb-dark mb-2">
+              現在 {availableCandidates.length} 名の候補者が利用可能
+            </div>
+            <PixelButton onClick={() => setShowCandidateModal(true)}>
+              候補者を確認する
+            </PixelButton>
           </div>
         </div>
       </PixelCard>
@@ -329,6 +340,14 @@ export default function TrainersPage() {
           onClose={handleCloseDetailModal}
         />
       )}
+
+      {/* 候補者選択モーダル */}
+      <CandidateSelectionModal
+        isOpen={showCandidateModal}
+        onClose={() => setShowCandidateModal(false)}
+        onHire={handleHireTrainer}
+        candidates={availableCandidates}
+      />
     </div>
   )
 }
