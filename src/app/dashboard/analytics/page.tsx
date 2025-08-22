@@ -5,47 +5,81 @@ import { useRouter } from 'next/navigation'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
-import { gameLogic } from '@/lib/gameLogic'
 import { formatMoney } from '@/lib/utils'
-import { useNotifications } from '@/contexts/GameContext'
+import { useGameState, useEconomy, useTrainers, useExpeditions } from '@/lib/game-state/hooks'
 
 export default function AnalyticsPage() {
-  const [gameState, setGameState] = useState<any>(null)
-  const [gameSummary, setGameSummary] = useState<any>(null)
   const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month' | 'all'>('week')
-  const { addNotification } = useNotifications()
   const router = useRouter()
+  
+  const { gameData } = useGameState()
+  const { money, transactions } = useEconomy()
+  const { trainers } = useTrainers()
+  const { expeditions } = useExpeditions()
 
-  useEffect(() => {
-    loadGameData()
-    
-    // 定期更新
-    const interval = setInterval(loadGameData, 10000) // 10秒毎
-    return () => clearInterval(interval)
-  }, [])
+  // JSON システムから分析データを計算
+  const gameState = {
+    progress: {
+      level: gameData?.player?.level || 1,
+      experience: gameData?.player?.experience || 0,
+      nextLevelExp: gameData?.player?.nextLevelExp || 1000,
+      totalPlayTime: gameData?.statistics?.totalPlayTime || 0,
+      unlockedFeatures: ['basic_training', 'pokemon_management', 'expeditions', 'economy'],
+      difficulty: 'normal'
+    },
+    metrics: {
+      averageEfficiency: trainers.length > 0 ? trainers.reduce((sum, t) => sum + t.level, 0) / trainers.length / 10 : 1.0,
+      expeditionSuccessRate: expeditions.length > 0 ? 
+        (expeditions.filter(e => e.status === 'completed').length / expeditions.length) * 100 : 100,
+      totalRevenue: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0),
+      totalExpenses: transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+      netProfit: transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0) - 
+                transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0),
+      expeditionsCompleted: expeditions.filter(e => e.status === 'completed').length,
+      pokemonCaught: gameData?.pokemon?.length || 0,
+      trainersHired: trainers.length,
+      facilitiesUpgraded: 0,
+      researchCompleted: 0
+    },
+    balance: {
+      trainerGrowthRate: 1.0,
+      pokemonGrowthRate: 1.0,
+      expeditionDifficulty: 1.0,
+      economyInflation: 1.0,
+      researchSpeed: 1.0,
+      facilityEfficiency: 1.0
+    }
+  }
 
-  const loadGameData = () => {
-    setGameState(gameLogic.getGameState())
-    setGameSummary(gameLogic.generateGameSummary())
+  const gameSummary = {
+    overallScore: (gameData?.player?.experience || 0) + money + (trainers.length * 100) + ((gameData?.pokemon?.length || 0) * 50),
+    recommendations: [
+      money < 10000 ? '資金を増やしましょう' : null,
+      trainers.length < 3 ? 'トレーナーを雇用しましょう' : null,
+      expeditions.filter(e => e.status === 'active').length === 0 ? '派遣を開始しましょう' : null
+    ].filter(Boolean),
+    nextMilestone: {
+      level: gameState.progress.level + 1,
+      description: `レベル${gameState.progress.level + 1}で新機能が解放されます`
+    }
   }
 
   const handleEmergencyEvent = () => {
-    const event = gameLogic.generateEmergencyEvent()
+    const events = [
+      { description: 'ポケモンが負傷しました', severity: '中', duration: 30 },
+      { description: '施設でトラブルが発生しました', severity: '低', duration: 15 },
+      { description: '緊急派遣要請が来ています', severity: '高', duration: 60 }
+    ]
+    const event = events[Math.floor(Math.random() * events.length)]
     alert(`🚨 ${event.description}\n深刻度: ${event.severity}\n持続時間: ${event.duration}分`)
   }
 
   const handleDetailedReport = () => {
-    addNotification({
-      type: 'info',
-      message: '詳細レポートを生成しています...'
-    })
+    console.log('詳細レポートを生成しています...')
     
     // 詳細レポートの生成処理をシミュレート
     setTimeout(() => {
-      addNotification({
-        type: 'success',
-        message: '📊 詳細レポートが生成されました'
-      })
+      console.log('📊 詳細レポートが生成されました')
       console.log('詳細レポート生成:', {
         period: selectedPeriod,
         gameState,
@@ -53,17 +87,6 @@ export default function AnalyticsPage() {
         timestamp: new Date().toISOString()
       })
     }, 2000)
-    
-    console.log('詳細レポート処理を実行')
-    // 実際の詳細レポート生成処理をここに追加
-  }
-
-  if (!gameState || !gameSummary) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="font-pixel text-retro-gb-mid">データを読み込み中...</div>
-      </div>
-    )
   }
 
   const getLevelProgress = () => {
@@ -299,7 +322,7 @@ export default function AnalyticsPage() {
       <PixelCard title="AI分析レコメンデーション">
         <div className="space-y-3">
           {gameSummary.recommendations.length > 0 ? (
-            gameSummary.recommendations.map((rec: string, index: number) => (
+            gameSummary.recommendations.map((rec, index) => (
               <div key={index} className="flex items-start space-x-3 p-3 bg-blue-50 border border-blue-200">
                 <span className="text-blue-600 font-bold">💡</span>
                 <span className="font-pixel text-xs text-blue-700 flex-1">{rec}</span>

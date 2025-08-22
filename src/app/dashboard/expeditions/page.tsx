@@ -6,9 +6,7 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { ExpeditionCard } from '@/components/expeditions/ExpeditionCard'
 import { LocationCard } from '@/components/expeditions/LocationCard'
 import { TrainerSelectionModal } from '@/components/expeditions/TrainerSelectionModal'
-import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
-import { getUserExpeditions, startRealExpedition } from '@/lib/expedition-integration'
-import { getSafeGameData } from '@/lib/data-utils'
+import { useGameState, useExpeditions, useTrainers } from '@/lib/game-state/hooks'
 import { gameController, EXPEDITION_LOCATIONS } from '@/lib/game-logic'
 import { useState, useEffect, useCallback } from 'react'
 
@@ -52,8 +50,8 @@ const sampleActiveExpeditions = [
 
 // ゲームロジックシステムから実際の派遣先データを取得
 const getGameLocations = (trainerLevel: number = 5) => {
-  return gameController.getAvailableExpeditions(trainerLevel).map(location => ({
-    id: location.id,
+  return gameController.getAvailableExpeditions(trainerLevel).map((location, index) => ({
+    id: index + 1, // number型のIDを割り当て
     nameJa: location.nameJa,
     distanceLevel: location.distanceLevel,
     travelCost: Math.floor(location.baseRewardMoney * 0.3), // 報酬の30%を旅費として計算
@@ -71,75 +69,37 @@ const sampleLocations = getGameLocations()
 
 export default function ExpeditionsPage() {
   const [selectedTab, setSelectedTab] = useState<'active' | 'locations' | 'history'>('active')
-  const [realExpeditionData, setRealExpeditionData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isTrainerModalOpen, setIsTrainerModalOpen] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState<number | null>(null)
   
-  const { isMockMode, user, isAuthenticated } = useAuth()
-  const gameData = useGameData()
-  const { addNotification } = useNotifications()
+  const { gameData, actions } = useGameState()
+  const { expeditions, actions: expeditionActions } = useExpeditions()
+  const { trainers, actions: trainerActions } = useTrainers()
   
-  // 実際のゲームデータを統一的に取得
-  const safeGameData = getSafeGameData(isMockMode, gameData, user)
+  const getAvailableTrainers = () => trainers.filter(t => t.status === 'available')
   
-  // 実際のデータベースから派遣情報を取得
-  useEffect(() => {
-    async function loadRealExpeditionData() {
-      if (isMockMode || !isAuthenticated || !user) return
-      
-      setIsLoading(true)
-      try {
-        const expeditionData = await getUserExpeditions(user)
-        setRealExpeditionData(expeditionData)
-      } catch (error) {
-        console.error('派遣データ読み込みエラー:', error)
-        addNotification({
-          type: 'error',
-          message: '派遣データの読み込みに失敗しました'
-        })
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    
-    loadRealExpeditionData()
-  }, [isMockMode, isAuthenticated, user, addNotification])
-  
-  // 実際のゲームデータまたはサンプルデータを使用
-  const expeditions = isMockMode 
-    ? (safeGameData.expeditions || sampleActiveExpeditions)
-    : (realExpeditionData?.active || [])
-  
-  const locations = isMockMode
-    ? sampleLocations
-    : (realExpeditionData?.locations || sampleLocations)
-  
-  const availableTrainers = isMockMode
-    ? safeGameData.trainers || []
-    : (realExpeditionData?.trainers?.filter((t: any) => t.status === 'available') || [])
+  // ゲームデータから情報を取得
+  const locations = sampleLocations // 固定のロケーションデータを使用
+  const availableTrainers = getAvailableTrainers()
   
   // 統計計算
   const stats = {
-    active: expeditions.length,
-    interventionRequired: expeditions.filter((exp: any) => 
-      exp.hasInterventionRequired || 
-      (exp.status === 'active' && Math.random() > 0.7)
+    active: expeditions.filter(exp => exp.status === 'active').length,
+    interventionRequired: expeditions.filter(exp => 
+      exp.status === 'active' && exp.events.some(event => !event.resolved && event.choices)
     ).length,
-    todayEarnings: isMockMode 
-      ? expeditions.reduce((sum: number, exp: any) => sum + (exp.estimatedReward || 0), 0)
-      : (realExpeditionData?.completed?.reduce((sum: number, exp: any) => {
-          const today = new Date().toDateString()
-          const completedToday = exp.actual_return && new Date(exp.actual_return).toDateString() === today
-          return completedToday ? sum + (exp.result_summary?.totalReward || 0) : sum
-        }, 0) || 0),
-    availableLocations: locations.filter((loc: any) => 
-      isMockMode ? loc.isUnlocked : (loc.is_unlocked_by_default || false)
-    ).length
+    todayEarnings: expeditions
+      .filter(exp => {
+        const today = new Date().toDateString()
+        return exp.actualEndTime && new Date(exp.actualEndTime).toDateString() === today
+      })
+      .reduce((sum, exp) => sum + (exp.result?.moneyEarned || 0), 0),
+    availableLocations: locations.filter(loc => loc.isUnlocked).length
   }
   
   const handleStartExpedition = (locationId: number | string) => {
-    console.log('🚀 派遣処理開始:', { locationId, isMockMode, availableTrainersCount: availableTrainers.length })
+    console.log('🚀 派遣処理開始:', { locationId, availableTrainersCount: availableTrainers.length })
     
     setSelectedLocationId(typeof locationId === 'string' ? parseInt(locationId) : locationId)
     setIsTrainerModalOpen(true)
@@ -152,89 +112,37 @@ export default function ExpeditionsPage() {
     setIsTrainerModalOpen(false)
     
     try {
-      if (isMockMode) {
-        // 選択されたトレーナーを取得
-        const selectedTrainer = availableTrainers.find((t: any) => t.id === trainerId)
-        if (!selectedTrainer) {
-          addNotification({
-            type: 'error',
-            message: 'トレーナーが見つかりません'
-          })
-          return
-        }
-        
-        console.log('📋 選択されたトレーナー:', selectedTrainer)
-        
-        // ゲームロジックを使用した実際の派遣実行（モックモード）
-        const result = await gameController.executeExpedition({
-          trainerId: selectedTrainer.id,
-          locationId: selectedLocationId.toString(),
-          durationHours: 2,
-          strategy: 'balanced',
-          playerAdvice: []
-        })
-        
-        console.log('📊 派遣結果:', result)
-        
-        addNotification({
-          type: 'success',
-          message: `${selectedTrainer.name}の派遣完了！₽${result.economicImpact.moneyGained.toLocaleString()}を獲得${result.pokemonCaught.length > 0 ? ` & ポケモン${result.pokemonCaught.length}体捕獲` : ''}`
-        })
-        
-        // 捕獲したポケモンの詳細を表示
-        if (result.pokemonCaught.length > 0) {
-          for (const pokemon of result.pokemonCaught) {
-            addNotification({
-              type: 'info',
-              message: `${pokemon.species?.name_ja || 'ポケモン'}(Lv.${pokemon.level})を捕獲しました！`
-            })
-          }
-        }
-        
-        // 画面更新のためのリロード
-        window.location.reload()
+      // 選択されたトレーナーを取得
+      const selectedTrainer = availableTrainers.find(t => t.id === trainerId)
+      if (!selectedTrainer) {
+        console.error('トレーナーが見つかりません')
         return
       }
       
-      if (!user) {
-        addNotification({
-          type: 'error',
-          message: 'ユーザー情報が見つかりません'
-        })
-        return
-      }
+      console.log('📋 選択されたトレーナー:', selectedTrainer)
       
-      const result = await startRealExpedition(
-        user,
+      // JSON システムを使用して派遣を開始
+      const now = new Date().toISOString()
+      const endTime = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+      
+      const expeditionId = expeditionActions.start({
         trainerId,
-        selectedLocationId,
-        'balanced',
-        2 // 2時間の派遣
-      )
+        locationId: selectedLocationId,
+        mode: 'balanced',
+        targetDuration: 2,
+        strategy: [],
+        status: 'active',
+        startTime: now,
+        estimatedEndTime: endTime,
+        currentProgress: 0,
+        events: [],
+        interventions: []
+      })
       
-      if (result.success) {
-        const selectedTrainer = availableTrainers.find((t: any) => t.id === trainerId)
-        addNotification({
-          type: 'success',
-          message: `${selectedTrainer?.name || 'トレーナー'}を派遣しました！`
-        })
-        // データを再読み込み
-        if (!isMockMode && isAuthenticated && user) {
-          const expeditionData = await getUserExpeditions(user)
-          setRealExpeditionData(expeditionData)
-        }
-      } else {
-        addNotification({
-          type: 'error',
-          message: result.error || '派遣開始に失敗しました'
-        })
-      }
+      console.log('🚀 派遣開始:', expeditionId)
+      
     } catch (error) {
       console.error('派遣開始エラー:', error)
-      addNotification({
-        type: 'error',
-        message: '派遣開始中にエラーが発生しました'
-      })
     } finally {
       setIsLoading(false)
       setSelectedLocationId(null)
@@ -242,47 +150,31 @@ export default function ExpeditionsPage() {
   }
   
   const handleIntervention = (expeditionId: string) => {
-    addNotification({
-      type: 'info',
-      message: `派遣#${expeditionId}に介入しました`
-    })
-    
-    // TODO: 実際の介入処理を実装
     console.log('介入処理:', { expeditionId })
+    // TODO: 実際の介入処理を実装
   }
 
   const handleShowDetails = (locationId: number) => {
-    const location = locations.find((loc: any) => loc.id === locationId)
+    const location = locations.find(loc => loc.id === locationId)
     if (location) {
-      addNotification({
-        type: 'info',
-        message: `${location.location_name_ja || location.nameJa}の詳細情報を表示`
-      })
       console.log('詳細表示:', { locationId, location })
     }
   }
 
   const handleExpeditionDetails = (expeditionId: string) => {
-    const expedition = expeditions.find((exp: any) => exp.id === expeditionId)
+    const expedition = expeditions.find(exp => exp.id === expeditionId)
     if (expedition) {
-      addNotification({
-        type: 'info',
-        message: `${expedition.trainer.name}の派遣詳細を表示`
-      })
       console.log('派遣詳細表示:', { expeditionId, expedition })
     }
   }
 
   const handleAutoDecision = (expeditionId: string) => {
-    addNotification({
-      type: 'info',
-      message: `派遣#${expeditionId}を自動判断モードに設定しました`
-    })
     console.log('自動判断設定:', { expeditionId })
+    // TODO: 自動判断モードの実装
   }
 
   const selectedLocation = selectedLocationId ? 
-    locations.find((loc: any) => loc.id === selectedLocationId) : null
+    locations.find(loc => loc.id === selectedLocationId) : null
 
   return (
     <div className="space-y-6">
@@ -353,18 +245,35 @@ export default function ExpeditionsPage() {
       {/* 進行中の派遣 */}
       {selectedTab === 'active' && (
         <div className="space-y-4">
-          {expeditions.length > 0 ? (
-            expeditions.map((expedition: any) => (
+          {expeditions.filter(exp => exp.status === 'active').length > 0 ? (
+            expeditions.filter(exp => exp.status === 'active').map(expedition => (
               <ExpeditionCard 
                 key={expedition.id}
-                expedition={expedition}
+                expedition={{
+                  id: expedition.id,
+                  trainer: { 
+                    id: expedition.trainerId, 
+                    name: trainers.find(t => t.id === expedition.trainerId)?.name || '不明',
+                    job: trainers.find(t => t.id === expedition.trainerId)?.job || 'トレーナー'
+                  },
+                  location: {
+                    id: expedition.locationId,
+                    nameJa: locations.find(l => l.id === expedition.locationId)?.nameJa || '不明',
+                    distanceLevel: expedition.targetDuration,
+                    estimatedReturn: expedition.estimatedEndTime,
+                    backgroundImage: locations.find(l => l.id === expedition.locationId)?.backgroundImage
+                  },
+                  status: expedition.status,
+                  currentProgress: expedition.currentProgress,
+                  expeditionMode: expedition.mode,
+                  hasInterventionRequired: expedition.events.some(event => !event.resolved && event.choices),
+                  estimatedReward: 1000, // デフォルト値
+                  startedAt: expedition.startTime
+                }}
                 onIntervene={handleIntervention}
                 onRecall={(id) => {
-                  addNotification({
-                    type: 'info',
-                    message: `派遣#${id}を呼び戻しました`
-                  })
                   console.log('呼び戻し処理:', { id })
+                  // TODO: 呼び戻し処理の実装
                 }}
                 onShowDetails={handleExpeditionDetails}
                 onAutoDecision={handleAutoDecision}
@@ -389,7 +298,7 @@ export default function ExpeditionsPage() {
       {/* 派遣先一覧 */}
       {selectedTab === 'locations' && (
         <div className="space-y-4">
-          {availableTrainers.length === 0 && !isMockMode && (
+          {availableTrainers.length === 0 && (
             <PixelCard>
               <div className="text-center py-4">
                 <div className="font-pixel text-xs text-retro-gb-mid mb-2">
@@ -403,22 +312,10 @@ export default function ExpeditionsPage() {
           )}
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {locations.map((location: any) => (
+            {locations.map(location => (
               <LocationCard
                 key={location.id}
-                location={{
-                  id: location.id,
-                  nameJa: location.location_name_ja || location.nameJa,
-                  distanceLevel: location.distance_level || location.distanceLevel,
-                  travelCost: location.travel_cost || location.travelCost,
-                  travelTimeHours: location.travel_time_hours || location.travelTimeHours,
-                  riskLevel: location.risk_level || location.riskLevel,
-                  baseRewardMoney: location.base_reward_money || location.baseRewardMoney,
-                  encounterTypes: location.encounter_types || location.encounterTypes || [],
-                  isUnlocked: isMockMode ? location.isUnlocked : (location.is_unlocked_by_default || false),
-                  description: location.description || `${location.location_name_ja || location.nameJa}での派遣`,
-                  backgroundImage: location.background_image || location.backgroundImage
-                }}
+                location={location}
                 onStartExpedition={handleStartExpedition}
                 onShowDetails={handleShowDetails}
                 disabled={isLoading}
@@ -500,7 +397,7 @@ export default function ExpeditionsPage() {
         }}
         onConfirm={handleConfirmExpedition}
         trainers={availableTrainers}
-        locationName={selectedLocation?.location_name_ja || selectedLocation?.nameJa || ''}
+        locationName={selectedLocation?.nameJa || ''}
         disabled={isLoading}
       />
     </div>

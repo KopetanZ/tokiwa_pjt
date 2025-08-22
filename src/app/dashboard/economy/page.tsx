@@ -7,32 +7,44 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { economySystem, Transaction, BudgetCategory, FinancialStatus } from '@/lib/economy'
 import { formatMoney } from '@/lib/utils'
-import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
+import { useGameState, useEconomy } from '@/lib/game-state/hooks'
 import { clsx } from 'clsx'
 
 export default function EconomyPage() {
   const [selectedTab, setSelectedTab] = useState<'overview' | 'transactions' | 'budget' | 'reports'>('overview')
   
-  const { isMockMode } = useAuth()
-  const gameData = useGameData()
-  const { addNotification } = useNotifications()
+  const { gameData } = useGameState()
+  const { money, transactions, actions } = useEconomy()
   
-  // モックデータまたは実際のデータを使用
-  const transactions = isMockMode ? gameData.transactions.map(t => ({
-    ...t,
-    timestamp: new Date(t.created_at),
-    relatedId: t.reference_id
-  })) : economySystem.getTransactions(20)
+  // JSON システムから取得したデータを使用
+  const transactionList = transactions.slice(0, 20).map(t => ({
+    id: t.id,
+    type: t.type,
+    amount: t.amount,
+    category: t.category,
+    description: t.description,
+    timestamp: new Date(t.timestamp),
+    relatedId: t.relatedId
+  }))
   
-  const financialStatus = isMockMode ? {
-    balance: 100000,
-    monthlyIncome: 25000,
-    monthlyExpenses: 18000,
-    netIncome: 7000,
-    profitability: 28.0,
-    burnRate: Infinity, // 黒字のため無限大
-    totalAssets: 150000
-  } : economySystem.getFinancialStatus()
+  const totalIncome = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0)
+  const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0)
+  const netIncome = totalIncome - totalExpenses
+  const burnRate = totalExpenses > 0 ? money / totalExpenses * 30 : Infinity
+  const totalAssets = money // 簡単化: 現金のみ
+  
+  const financialStatus = {
+    totalIncome,
+    totalExpenses,
+    currentBalance: money,
+    netIncome,
+    profitability: netIncome,
+    burnRate,
+    totalAssets,
+    monthlyIncome: totalIncome,
+    monthlyExpenses: totalExpenses,
+    recentTransactions: transactions.slice(0, 5)
+  }
   
   const budget: BudgetCategory[] = [
     {
@@ -64,49 +76,58 @@ export default function EconomyPage() {
     }
   ]
   
-  const monthlyReport = isMockMode ? gameData.analysis[0] : economySystem.generateMonthlyReport()
+  const monthlyReport = {
+    insights: [
+      `現在の資金: ${formatMoney(money)}`,
+      `今月の取引件数: ${transactions.length}`,
+      '安定した経営を維持しています'
+    ],
+    recommendations: [
+      '派遣事業の拡大を検討してください',
+      'トレーナーの追加雇用で収益向上を目指しましょう'
+    ]
+  }
 
   const handleQuickTransaction = async (type: 'income' | 'expense', category: string, amount: number, description: string) => {
     try {
-      const { gameController } = await import('@/lib/game-logic')
-      
-      // 資金チェック（支出の場合）
       if (type === 'expense') {
-        const canAfford = gameController.checkCanAfford(amount)
-        if (!canAfford) {
-          addNotification({
-            type: 'error',
-            message: `資金が不足しています。必要: ₽${amount.toLocaleString()}`
-          })
+        // 支出の場合は資金チェック
+        if (money < amount) {
+          console.error(`資金が不足しています。現在: ₽${money.toLocaleString()}, 必要: ₽${amount.toLocaleString()}`)
           return
         }
-      }
-      
-      // 取引記録
-      const result = gameController.recordTransaction(type, category, amount, description)
-      
-      if (result) {
-        addNotification({
-          type: type === 'income' ? 'success' : 'info',
-          message: `${description}: ${type === 'income' ? '+' : '-'}₽${amount.toLocaleString()}`
-        })
         
-        // データ更新のため画面リロード（簡易実装）
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        // 支出処理
+        const success = actions.canAfford(amount)
+        if (success) {
+          actions.updateMoney(-amount)
+          actions.addTransaction({
+            type: 'expense',
+            category: category as any,
+            amount,
+            description,
+            timestamp: new Date().toISOString()
+          })
+        }
+        if (success) {
+          console.log(`${description}: -₽${amount.toLocaleString()}`)
+        } else {
+          console.error('支出処理に失敗しました')
+        }
       } else {
-        addNotification({
-          type: 'error',
-          message: type === 'expense' ? '資金が不足しています' : '取引の記録に失敗しました'
+        // 収入処理
+        actions.updateMoney(amount)
+        actions.addTransaction({
+          type: 'income',
+          category: category as any,
+          amount,
+          description,
+          timestamp: new Date().toISOString()
         })
+        console.log(`${description}: +₽${amount.toLocaleString()}`)
       }
     } catch (error) {
       console.error('取引処理エラー:', error)
-      addNotification({
-        type: 'error',
-        message: '取引処理中にエラーが発生しました'
-      })
     }
   }
 
@@ -158,8 +179,8 @@ export default function EconomyPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <PixelCard title="現在の残高">
           <div className="text-center">
-            <div className={`font-pixel-large ${getHealthColor(financialStatus.balance, 'balance')}`}>
-              {formatMoney(financialStatus.balance)}
+            <div className={`font-pixel-large ${getHealthColor(financialStatus.currentBalance, 'balance')}`}>
+              {formatMoney(financialStatus.currentBalance)}
             </div>
             <div className="font-pixel text-xs text-retro-gb-mid">利用可能資金</div>
           </div>
@@ -302,7 +323,7 @@ export default function EconomyPage() {
           {/* 最近の取引 */}
           <PixelCard title="最近の取引">
             <div className="space-y-2">
-              {transactions.slice(0, 5).map((transaction) => (
+              {transactionList.slice(0, 5).map((transaction) => (
                 <div key={transaction.id} className="flex justify-between items-center py-2 border-b border-retro-gb-mid last:border-b-0">
                   <div>
                     <div className="font-pixel text-xs text-retro-gb-dark">
@@ -327,7 +348,7 @@ export default function EconomyPage() {
         <div className="space-y-4">
           <PixelCard title="取引履歴">
             <div className="space-y-3">
-              {transactions.map((transaction) => (
+              {transactionList.map((transaction) => (
                 <div key={transaction.id} className="border border-retro-gb-mid p-3">
                   <div className="flex justify-between items-start">
                     <div className="flex-1">
@@ -412,7 +433,7 @@ export default function EconomyPage() {
               <div>
                 <h3 className="font-pixel text-sm text-retro-gb-dark mb-2">分析結果</h3>
                 <div className="space-y-2">
-                  {(isMockMode ? monthlyReport.recommendations : monthlyReport.insights || []).map((insight: string, index: number) => (
+                  {monthlyReport.insights.map((insight: string, index: number) => (
                     <div key={index} className="font-pixel text-xs text-retro-gb-mid p-2 bg-retro-gb-light border border-retro-gb-mid">
                       {insight}
                     </div>
@@ -449,32 +470,17 @@ export default function EconomyPage() {
                 </div>
               </div>
 
-              {/* 予測結果（モックモード用） */}
-              {isMockMode && monthlyReport.predicted_outcomes && (
-                <div>
-                  <h3 className="font-pixel text-sm text-retro-gb-dark mb-2">予測結果</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="border border-retro-gb-mid p-3">
-                      <div className="font-pixel text-sm text-retro-gb-dark">週次利益</div>
-                      <div className="font-pixel text-lg text-green-600">
-                        {formatMoney(monthlyReport.predicted_outcomes.weekly_profit)}
-                      </div>
+              {/* 推奨事項 */}
+              <div>
+                <h3 className="font-pixel text-sm text-retro-gb-dark mb-2">推奨事項</h3>
+                <div className="space-y-2">
+                  {monthlyReport.recommendations.map((rec: string, index: number) => (
+                    <div key={index} className="font-pixel text-xs text-blue-700 p-2 bg-blue-50 border border-blue-200">
+                      💡 {rec}
                     </div>
-                    <div className="border border-retro-gb-mid p-3">
-                      <div className="font-pixel text-sm text-retro-gb-dark">トレーナー成長</div>
-                      <div className="font-pixel text-lg text-blue-600">
-                        {monthlyReport.predicted_outcomes.trainer_growth}名
-                      </div>
-                    </div>
-                    <div className="border border-retro-gb-mid p-3">
-                      <div className="font-pixel text-sm text-retro-gb-dark">ポケモン進化</div>
-                      <div className="font-pixel text-lg text-purple-600">
-                        {monthlyReport.predicted_outcomes.pokemon_evolution}匹
-                      </div>
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              )}
+              </div>
             </div>
           </PixelCard>
         </div>

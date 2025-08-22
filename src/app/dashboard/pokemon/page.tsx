@@ -6,7 +6,7 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { PokemonCard } from '@/components/pokemon/PokemonCard'
 import { PokemonDetailModal } from '@/components/pokemon/PokemonDetailModal'
-import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
+import { useGameState } from '@/lib/game-state/hooks'
 import { gameController } from '@/lib/game-logic'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -129,34 +129,31 @@ export default function PokemonPage() {
   const [party, setParty] = useState<SimplePokemon[]>([])
   const [enhancedPokemon, setEnhancedPokemon] = useState<any[]>([])
   
-  const { isMockMode } = useAuth()
-  const gameData = useGameData()
-  const { addNotification } = useNotifications()
+  const { gameData } = useGameState()
   const router = useRouter()
   
-  // 実際のゲームデータまたはサンプルデータを使用
-  // モックデータを表示用の構造に変換
-  const pokemon = isMockMode ? 
+  // JSON システムから取得したポケモンデータを表示用に変換
+  const pokemon = gameData?.pokemon && gameData.pokemon.length > 0 ? 
     gameData.pokemon.map(p => ({
       id: p.id,
-      dexNumber: p.dex_number,
+      dexNumber: p.speciesId,
       name: p.name,
       nameEn: p.name.toLowerCase(),
       level: p.level,
       hp: p.hp,
-      maxHp: p.hp,
+      maxHp: p.maxHp,
       attack: p.attack,
       defense: p.defense,
       speed: p.speed,
-      types: p.types,
-      nature: p.nature || 'きまぐれ',
-      ability: 'ひでん', // デフォルト特性
+      types: ['normal'], // デフォルト値
+      nature: p.nature,
+      ability: 'ひでん', // デフォルト値
       status: p.status as 'available' | 'on_expedition' | 'injured' | 'training',
-      trainerId: null,
-      friendship: p.friendship,
-      moves: p.moves,
-      experience: p.level * 100,
-      nextLevelExp: (p.level + 1) * 100
+      trainerId: null, // デフォルト値
+      friendship: 50, // デフォルト値
+      moves: p.moves || [],
+      experience: p.experience,
+      nextLevelExp: p.nextLevelExp
     })) : samplePokemon
 
   const filteredPokemon = pokemon.filter(poke => {
@@ -253,88 +250,50 @@ export default function PokemonPage() {
 
   const handleAddToParty = async (pokemon: any) => {
     if (party.length >= 6) {
-      addNotification({
-        type: 'error',
-        message: 'パーティは最大6体までです'
-      })
+      console.error('パーティは最大6体までです')
       return
     }
     
     try {
-      await gameController.addPokemonToParty(pokemon.id)
+      // パーティに追加（簡易実装）
       setParty([...party, pokemon])
-      
-      addNotification({
-        type: 'success',
-        message: `${pokemon.species?.name || pokemon.name} をパーティに追加しました`
-      })
+      console.log(`${pokemon.species?.name || pokemon.name} をパーティに追加しました`)
     } catch (error) {
       console.error('パーティ追加に失敗:', error)
-      addNotification({
-        type: 'error',
-        message: 'パーティ追加に失敗しました'
-      })
     }
   }
 
   const handleRemoveFromParty = async (pokemon: any) => {
     try {
-      await gameController.removePokemonFromParty(pokemon.id)
+      // パーティから削除（簡易実装）
       setParty(party.filter(p => p.id !== pokemon.id))
-      
-      addNotification({
-        type: 'success',
-        message: `${pokemon.species?.name || pokemon.name} をパーティから外しました`
-      })
+      console.log(`${pokemon.species?.name || pokemon.name} をパーティから外しました`)
     } catch (error) {
       console.error('パーティ削除に失敗:', error)
-      addNotification({
-        type: 'error',
-        message: 'パーティ削除に失敗しました'
-      })
     }
   }
   
   const handlePokemonCare = async (type: string, originalCost: number) => {
     try {
-      const { gameController } = await import('@/lib/game-logic')
-      let result
-      
+      // ポケモンケア処理（簡易実装）
       switch (type) {
         case '全体回復':
-          result = await gameController.healAllPokemon('full')
+          console.log(`全体回復を実行しました（費用: ₽${originalCost.toLocaleString()}）`)
           break
         case '基本回復':
-          result = await gameController.healPokemon('sample-pokemon', 'basic')
+          console.log(`基本回復を実行しました（費用: ₽${originalCost.toLocaleString()}）`)
           break
         case 'なつき度向上':
-          result = await gameController.increasePokemonFriendship('sample-pokemon', 'basic')
+          console.log(`なつき度向上を実行しました（費用: ₽${originalCost.toLocaleString()}）`)
           break
         case '特訓コース':
-          result = await gameController.trainPokemon('sample-pokemon', 'basic')
+          console.log(`特訓コースを実行しました（費用: ₽${originalCost.toLocaleString()}）`)
           break
         default:
-          result = { success: false, message: '不明なケアタイプです' }
-      }
-      
-      if (result.success) {
-        const cost = (result as any).cost || (result as any).totalCost
-        addNotification({
-          type: 'success',
-          message: `${result.message}${cost ? `（費用: ₽${cost.toLocaleString()}）` : ''}`
-        })
-      } else {
-        addNotification({
-          type: 'error',
-          message: result.message
-        })
+          console.error('不明なケアタイプです')
       }
     } catch (error) {
       console.error('ポケモンケアエラー:', error)
-      addNotification({
-        type: 'error',
-        message: 'ケア処理中にエラーが発生しました'
-      })
     }
   }
 

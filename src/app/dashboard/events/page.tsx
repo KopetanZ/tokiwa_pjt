@@ -1,10 +1,10 @@
 'use client'
 
-import { useAuth } from '@/contexts/GameContext'
+import { useGameState } from '@/lib/game-state/hooks'
 import { PixelCard } from '@/components/ui/PixelCard'
 
 export default function EventsPage() {
-  const { user, isMockMode } = useAuth()
+  const { gameData } = useGameState()
 
   return (
     <div className="space-y-6">

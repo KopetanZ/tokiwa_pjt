@@ -7,16 +7,15 @@ import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { facilitySystem, Facility as FacilityType, UpgradeProject } from '@/lib/game-logic/facility-system'
 import { formatMoney } from '@/lib/utils'
-import { useGameData, useAuth, useNotifications } from '@/contexts/GameContext'
+import { useGameState, useEconomy } from '@/lib/game-state/hooks'
 import { clsx } from 'clsx'
 
 export default function FacilitiesPage() {
   const [selectedTab, setSelectedTab] = useState<'facilities' | 'upgrades' | 'overview' | 'research'>('overview')
   const [loading, setLoading] = useState(true)
   
-  const { isMockMode } = useAuth()
-  const gameData = useGameData()
-  const { addNotification } = useNotifications()
+  const { gameData } = useGameState()
+  const { money, actions } = useEconomy()
 
   // 新しい施設システムを使用
   const [facilities, setFacilities] = useState<FacilityType[]>([])
@@ -57,38 +56,23 @@ export default function FacilitiesPage() {
     try {
       const result = await facilitySystem.startUpgrade(facilityId)
       if (result.success) {
-        addNotification({
-          type: 'success',
-          message: result.message
-        })
+        console.log(result.message)
         loadFacilityData() // データ更新
       } else {
-        addNotification({
-          type: 'error',
-          message: result.message
-        })
+        console.error(result.message)
       }
     } catch (error) {
-      addNotification({
-        type: 'error',
-        message: 'アップグレードに失敗しました'
-      })
+      console.error('アップグレードに失敗しました:', error)
     }
   }
 
   const handleUnlockFacility = (facilityId: string) => {
     const success = facilitySystem.unlockFacility(facilityId)
     if (success) {
-      addNotification({
-        type: 'success',
-        message: '新しい施設がロック解除されました！'
-      })
+      console.log('新しい施設がロック解除されました！')
       loadFacilityData()
     } else {
-      addNotification({
-        type: 'error',
-        message: 'ロック解除の条件を満たしていません'
-      })
+      console.error('ロック解除の条件を満たしていません')
     }
   }
 
@@ -96,55 +80,43 @@ export default function FacilitiesPage() {
     try {
       const facility = facilitySystem.getFacility(facilityId)
       if (!facility) {
-        addNotification({
-          type: 'error',
-          message: '施設が見つかりません'
-        })
+        console.error('施設が見つかりません')
         return
       }
 
       // 建設費用の確認
       const constructionCost = facility.upgradeCost
-      const { gameController } = await import('@/lib/game-logic')
-      const canAfford = gameController.checkCanAfford(constructionCost)
       
-      if (!canAfford) {
-        addNotification({
-          type: 'error',
-          message: `資金が不足しています。必要: ₽${constructionCost.toLocaleString()}`
-        })
+      if (money < constructionCost) {
+        console.error(`資金が不足しています。現在: ₽${money.toLocaleString()}, 必要: ₽${constructionCost.toLocaleString()}`)
         return
       }
 
       // 建設費用の支払い
-      const paymentResult = gameController.recordTransaction(
-        'expense',
-        'facility',
-        constructionCost,
-        `${facility.name}建設費`
-      )
+      const canAfford = actions.canAfford(constructionCost)
+      const paymentResult = canAfford
+      if (canAfford) {
+        actions.updateMoney(-constructionCost)
+        actions.addTransaction({
+          type: 'expense',
+          category: 'facility_cost',
+          amount: constructionCost,
+          description: `${facility.name}建設費`,
+          timestamp: new Date().toISOString()
+        })
+      }
       
       if (paymentResult) {
         // 施設をレベル1に設定（建設開始）
         facilitySystem.debugSetFacilityLevel(facilityId, 1)
         
-        addNotification({
-          type: 'success',
-          message: `${facility.name}の建設を開始しました！（費用: ₽${constructionCost.toLocaleString()}）`
-        })
+        console.log(`${facility.name}の建設を開始しました！（費用: ₽${constructionCost.toLocaleString()}）`)
         loadFacilityData()
       } else {
-        addNotification({
-          type: 'error',
-          message: '建設費の支払いに失敗しました'
-        })
+        console.error('建設費の支払いに失敗しました')
       }
     } catch (error) {
       console.error('建設開始エラー:', error)
-      addNotification({
-        type: 'error',
-        message: '建設開始に失敗しました'
-      })
     }
   }
 
@@ -154,19 +126,13 @@ export default function FacilitiesPage() {
     const lockedFacilities = facilities.filter(f => !f.isUnlocked)
     
     if (unlockedButNotBuilt.length === 0 && lockedFacilities.length === 0) {
-      addNotification({
-        type: 'info',
-        message: '建設可能な新しい施設はありません'
-      })
+      console.log('建設可能な新しい施設はありません')
       return
     }
 
     // 建設可能施設の一覧を表示するタブに切り替え
     setSelectedTab('facilities')
-    addNotification({
-      type: 'info',
-      message: '施設一覧で建設可能な施設を確認してください'
-    })
+    console.log('施設一覧で建設可能な施設を確認してください')
   }
 
   const handleStartResearch = async (projectId: string) => {
@@ -174,52 +140,39 @@ export default function FacilitiesPage() {
       // 研究開始の実装
       const researchCost = 5000 // 基本研究費
       
-      const { gameController } = await import('@/lib/game-logic')
-      const canAfford = gameController.checkCanAfford(researchCost)
-      
-      if (!canAfford) {
-        addNotification({
-          type: 'error',
-          message: `資金が不足しています。必要: ₽${researchCost.toLocaleString()}`
-        })
+      if (money < researchCost) {
+        console.error(`資金が不足しています。現在: ₽${money.toLocaleString()}, 必要: ₽${researchCost.toLocaleString()}`)
         return
       }
       
-      const paymentResult = gameController.recordTransaction(
-        'expense',
-        'maintenance',
-        researchCost,
-        '施設研究費'
-      )
+      const canAfford = actions.canAfford(researchCost)
+      const paymentResult = canAfford
+      if (canAfford) {
+        actions.updateMoney(-researchCost)
+        actions.addTransaction({
+          type: 'expense',
+          category: 'other',
+          amount: researchCost,
+          description: '施設研究費',
+          timestamp: new Date().toISOString()
+        })
+      }
       
       if (paymentResult) {
-        addNotification({
-          type: 'success',
-          message: `研究を開始しました！（費用: ₽${researchCost.toLocaleString()}）`
-        })
+        console.log(`研究を開始しました！（費用: ₽${researchCost.toLocaleString()}）`)
         // 実際の研究プロジェクト開始処理をここに追加
       } else {
-        addNotification({
-          type: 'error',
-          message: '研究費の支払いに失敗しました'
-        })
+        console.error('研究費の支払いに失敗しました')
       }
     } catch (error) {
       console.error('研究開始エラー:', error)
-      addNotification({
-        type: 'error',
-        message: '研究開始に失敗しました'
-      })
     }
   }
 
   const handleCompleteUpgradeInstantly = async (projectId: string) => {
     const success = await facilitySystem.completeUpgradeInstantly(projectId)
     if (success) {
-      addNotification({
-        type: 'success',
-        message: 'アップグレードが完了しました！'
-      })
+      console.log('アップグレードが完了しました！')
       loadFacilityData()
     }
   }
@@ -270,10 +223,7 @@ export default function FacilitiesPage() {
             size="sm" 
             variant="secondary"
             onClick={() => {
-              addNotification({
-                type: 'info',
-                message: '施設レポート画面に移動します'
-              })
+              console.log('施設レポート画面に移動します')
               // TODO: 施設レポート画面の実装
             }}
           >

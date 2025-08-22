@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useGameState } from '@/lib/realtime-hooks'
+import { useGameState, useTrainers, useExpeditions, useEconomy } from '@/lib/game-state/hooks'
 import { supabase, safeSupabaseOperation } from '@/lib/supabase'
 import { User } from '@supabase/supabase-js'
 import { MOCK_USER, MOCK_GAME_DATA } from '@/lib/mock-data'
@@ -526,62 +526,81 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   // ゲームデータ同期（モックモードでない場合のみ）
-  const prevGameStateRef = useRef<{
-    profileId: string | null
-    pokemonLength: number
-    trainersLength: number
-    expeditionsLength: number
-    facilitiesLength: number
-    transactionsLength: number
-    isConnected: boolean
-    isLoading: boolean
-  }>({ profileId: null, pokemonLength: 0, trainersLength: 0, expeditionsLength: 0, facilitiesLength: 0, transactionsLength: 0, isConnected: false, isLoading: true })
-  
+  // JSON システムとの統合
+  const jsonGameStateHook = useGameState()
+  const jsonTrainersHook = useTrainers()
+  const jsonExpeditionsHook = useExpeditions()
+  const jsonEconomyHook = useEconomy()
+
+  // データソース判定とゲームデータ同期
   useEffect(() => {
-    if (state.user && !state.isMockMode) {
+    if (state.isMockMode || (!state.user && !shouldUseRealData)) {
+      // モックモードまたは未認証の場合はJSONシステムからデータを取得
+      const jsonGameData: GameContextState['gameData'] = {
+        profile: {
+          id: 'json-user',
+          guest_name: 'JSONユーザー',
+          school_name: jsonGameStateHook.gameData?.player?.schoolName || 'ポケモン学校',
+          current_money: jsonEconomyHook.money,
+          total_reputation: jsonGameStateHook.gameData?.player?.reputation || 0,
+          ui_theme: 'default',
+          settings: {},
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        },
+        pokemon: jsonGameStateHook.gameData?.pokemon || [],
+        trainers: jsonTrainersHook.trainers,
+        expeditions: jsonExpeditionsHook.expeditions,
+        facilities: [],
+        transactions: jsonEconomyHook.transactions,
+        progress: null,
+        analysis: []
+      }
+      
+      dispatch({ type: 'UPDATE_GAME_DATA', payload: jsonGameData })
+      dispatch({ type: 'SET_CONNECTION', payload: true }) // JSON システムは常に接続状態
+      dispatch({ type: 'SET_LOADING', payload: false })
+      dispatch({ type: 'SET_ERRORS', payload: [] })
+    } else if (state.user && !state.isMockMode) {
+      // 認証済みの場合は従来のSupabaseシステムを使用
       const currentGameState = {
-        profileId: (gameStateHook.profile?.profile as any)?.id || null,
-        pokemonLength: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon.length : 0,
-        trainersLength: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers.length : 0,
-        expeditionsLength: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions.length : 0,
-        facilitiesLength: Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities.length : 0,
-        transactionsLength: Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions.length : 0,
-        isConnected: gameStateHook.isConnected,
+        profileId: null, // JSONモードでは無効化
+        pokemonLength: Array.isArray(gameStateHook.gameData?.pokemon) ? gameStateHook.gameData.pokemon.length : 0,
+        trainersLength: 0, // デフォルト値
+        expeditionsLength: 0, // デフォルト値
+        facilitiesLength: 0, // デフォルト値
+        transactionsLength: 0, // デフォルト値
+        isConnected: true, // JSONモードでは常に接続済み
         isLoading: gameStateHook.isLoading
       }
       
-      // データが実際に変更された場合のみ更新
-      const hasDataChanged = 
-        currentGameState.profileId !== prevGameStateRef.current.profileId ||
-        currentGameState.pokemonLength !== prevGameStateRef.current.pokemonLength ||
-        currentGameState.trainersLength !== prevGameStateRef.current.trainersLength ||
-        currentGameState.expeditionsLength !== prevGameStateRef.current.expeditionsLength ||
-        currentGameState.facilitiesLength !== prevGameStateRef.current.facilitiesLength ||
-        currentGameState.transactionsLength !== prevGameStateRef.current.transactionsLength ||
-        currentGameState.isConnected !== prevGameStateRef.current.isConnected ||
-        currentGameState.isLoading !== prevGameStateRef.current.isLoading
-      
-      if (hasDataChanged) {
-        const newGameData: GameContextState['gameData'] = {
-          profile: gameStateHook.profile?.profile as GameContextState['gameData']['profile'] || null,
-          pokemon: Array.isArray(gameStateHook.pokemon?.pokemon) ? gameStateHook.pokemon.pokemon : [],
-          trainers: Array.isArray(gameStateHook.trainers?.trainers) ? gameStateHook.trainers.trainers : [],
-          expeditions: Array.isArray(gameStateHook.expeditions?.expeditions) ? gameStateHook.expeditions.expeditions : [],
-          facilities: Array.isArray(gameStateHook.facilities?.facilities) ? gameStateHook.facilities.facilities : [],
-          transactions: Array.isArray(gameStateHook.transactions?.transactions) ? gameStateHook.transactions.transactions : [],
-          progress: gameStateHook.progress?.progress || null,
-          analysis: Array.isArray(gameStateHook.analysis?.analyses) ? gameStateHook.analysis.analyses : []
-        }
-        
-        dispatch({ type: 'UPDATE_GAME_DATA', payload: newGameData })
-        dispatch({ type: 'SET_CONNECTION', payload: gameStateHook.isConnected })
-        dispatch({ type: 'SET_LOADING', payload: gameStateHook.isLoading })
-        dispatch({ type: 'SET_ERRORS', payload: gameStateHook.errors })
-        
-        prevGameStateRef.current = currentGameState
+      const newGameData: GameContextState['gameData'] = {
+        profile: null, // JSONモードでは無効化
+        pokemon: gameStateHook.gameData?.pokemon || [],
+        trainers: [],
+        expeditions: [],
+        facilities: [],
+        transactions: [],
+        progress: null,
+        analysis: []
       }
+      
+      dispatch({ type: 'UPDATE_GAME_DATA', payload: newGameData })
+      dispatch({ type: 'SET_CONNECTION', payload: true })
+      dispatch({ type: 'SET_LOADING', payload: gameStateHook.isLoading })
+      dispatch({ type: 'SET_ERRORS', payload: [] })
     }
-  }, [state.user?.id, state.isMockMode, gameStateHook])
+  }, [
+    state.user?.id, 
+    state.isMockMode, 
+    shouldUseRealData,
+    jsonGameStateHook.gameData,
+    jsonTrainersHook.trainers,
+    jsonExpeditionsHook.expeditions,
+    jsonEconomyHook.money,
+    jsonEconomyHook.transactions,
+    gameStateHook
+  ])
 
   // 進行状況マネージャーの初期化
   useEffect(() => {

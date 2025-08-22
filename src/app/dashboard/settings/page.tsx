@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth, useNotifications, useGameData } from '@/contexts/GameContext'
+import { useGameState } from '@/lib/game-state/hooks'
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { useRouter } from 'next/navigation'
@@ -10,88 +10,51 @@ import { getSafeGameData } from '@/lib/data-utils'
 import { UI } from '@/config/app'
 
 export default function SettingsPage() {
-  const { user, isMockMode, signOut, isAuthenticated } = useAuth()
-  const { addNotification } = useNotifications()
-  const gameData = useGameData()
+  const { gameData } = useGameState()
   const router = useRouter()
 
-  // 設定状態管理（データベース統合対応）
+  // 設定状態管理（JSON システム対応）
   const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS)
-  const [settingsManager, setSettingsManager] = useState<SettingsManager | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  
-  // 実際のゲームデータを安全に取得
-  const safeGameData = getSafeGameData(isMockMode, gameData, user)
 
-  // 設定管理システムを初期化
+  // JSON システムから設定を読み込み
   useEffect(() => {
     const initializeSettings = async () => {
       setIsLoading(true)
       
       try {
-        const manager = new SettingsManager(user, isMockMode)
-        setSettingsManager(manager)
-        
-        const loadedSettings = await manager.loadSettings()
-        setSettings(loadedSettings)
-        
-        console.log('設定を読み込みました:', loadedSettings)
-        
+        // localStorage から設定を読み込み
+        const savedSettings = localStorage.getItem('tokiwa-game-settings')
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings)
+          setSettings({ ...DEFAULT_SETTINGS, ...parsedSettings })
+          console.log('設定を読み込みました:', parsedSettings)
+        } else {
+          console.log('デフォルト設定を使用します')
+        }
       } catch (error) {
         console.error('設定の初期化に失敗:', error)
-        addNotification({
-          type: 'warning',
-          message: '設定の読み込みに失敗しました。デフォルト設定を使用します。'
-        })
       } finally {
         setIsLoading(false)
       }
     }
     
     initializeSettings()
-  }, [user, isMockMode, isAuthenticated])
+  }, [])
 
-  // 設定を保存（データベース＋localStorage統合）
+  // 設定を保存（JSON システム）
   const saveSettings = async (newSettings: UserSettings): Promise<boolean> => {
-    if (!settingsManager) {
-      console.error('設定管理システムが初期化されていません')
-      return false
-    }
-    
     setIsSaving(true)
     
     try {
-      const result = await settingsManager.saveSettings(newSettings)
-      
-      if (result.success) {
-        setSettings(newSettings)
-        console.log('設定を保存しました:', newSettings)
-        return true
-      } else {
-        if (isMockMode) {
-          // モックモードでは警告レベル
-          addNotification({
-            type: 'info',
-            message: '設定を保存しました（ローカルのみ）'
-          })
-          setSettings(newSettings)
-          return true
-        } else {
-          addNotification({
-            type: 'warning',
-            message: `設定の保存に失敗: ${result.error}`
-          })
-          return false
-        }
-      }
-      
+      // localStorage に設定を保存
+      localStorage.setItem('tokiwa-game-settings', JSON.stringify(newSettings))
+      setSettings(newSettings)
+      console.log('設定を保存しました:', newSettings)
+      return true
     } catch (error) {
       console.error('設定保存エラー:', error)
-      addNotification({
-        type: 'warning',
-        message: '設定の保存中にエラーが発生しました'
-      })
       return false
     } finally {
       setIsSaving(false)
@@ -100,7 +63,8 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try {
-      await signOut()
+      // JSON システムではローカルデータのクリア
+      localStorage.clear()
       router.push('/')
     } catch (error) {
       console.error('ログアウトエラー:', error)
@@ -135,15 +99,9 @@ export default function SettingsPage() {
       }
       
       if (typeof newValue === 'boolean') {
-        addNotification({
-          type: 'info',
-          message: `${settingNames[key] || key}を${newValue ? '有効' : '無効'}にしました`
-        })
+        console.log(`${settingNames[key] || key}を${newValue ? '有効' : '無効'}にしました`)
       } else {
-        addNotification({
-          type: 'info',
-          message: `${settingNames[key] || key}を変更しました`
-        })
+        console.log(`${settingNames[key] || key}を変更しました`)
       }
       
       console.log(`設定変更: ${key} = ${newValue}`)
@@ -152,31 +110,26 @@ export default function SettingsPage() {
 
   // データ管理ハンドラー
   const handleBackup = () => {
-    if (!settingsManager) {
-      addNotification({
-        type: 'warning',
-        message: '設定管理システムが初期化されていません'
-      })
-      return
-    }
-    
     try {
-      // バックアップデータの構築（統合設定管理対応）
+      // バックアップデータの構築（JSON システム対応）
       const backupData = {
-        ...settingsManager.generateBackupData(),
-        gameData: safeGameData ? {
-          trainers: safeGameData.trainers,
-          pokemon: safeGameData.pokemon,
-          expeditions: safeGameData.expeditions,
-          facilities: safeGameData.facilities,
-          transactions: safeGameData.transactions,
-          analysis: safeGameData.analysis
-        } : null,
+        version: '1.0',
+        timestamp: new Date().toISOString(),
+        settings,
+        gameData: {
+          schoolName: gameData?.player?.schoolName || 'ポケモン学校',
+          money: gameData?.player?.money || 100000,
+          reputation: gameData?.player?.reputation || 0,
+          experience: gameData?.player?.experience || 0,
+          trainers: gameData?.trainers || [],
+          pokemon: gameData?.pokemon || [],
+          expeditions: gameData?.expeditions || [],
+          transactions: gameData?.transactions || []
+        },
         localStorage: {
           // localStorage内の全ゲーム関連データ
           gameSettings: localStorage.getItem('tokiwa-game-settings'),
-          gameProgress: localStorage.getItem('tokiwa-game-progress'),
-          gameProfile: localStorage.getItem('tokiwa-game-profile')
+          gameState: localStorage.getItem('tokiwa-game-state')
         }
       }
 
@@ -194,18 +147,12 @@ export default function SettingsPage() {
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
 
-      addNotification({
-        type: 'success',
-        message: '📄 バックアップファイルをダウンロードしました'
-      })
+      console.log('📄 バックアップファイルをダウンロードしました')
       
       console.log('バックアップ作成完了:', backupData)
     } catch (error) {
       console.error('バックアップ作成エラー:', error)
-      addNotification({
-        type: 'warning',
-        message: 'バックアップの作成に失敗しました'
-      })
+      console.error('バックアップの作成に失敗しました')
     }
   }
 
@@ -221,10 +168,7 @@ export default function SettingsPage() {
       if (!file) return
       
       try {
-        addNotification({
-          type: 'info',
-          message: 'バックアップファイルを解析中...'
-        })
+        console.log('バックアップファイルを解析中...')
         
         const fileContent = await file.text()
         const backupData = JSON.parse(fileContent)
@@ -238,21 +182,17 @@ export default function SettingsPage() {
         const confirmRestore = confirm(
           `バックアップファイル情報:\n` +
           `作成日時: ${new Date(backupData.timestamp).toLocaleString('ja-JP')}\n` +
-          `ユーザー: ${backupData.user?.email || '不明'}\n\n` +
+          `バージョン: ${backupData.version}\n\n` +
           `このバックアップからデータを復元しますか？\n` +
           `現在のデータは上書きされます。`
         )
         
         if (!confirmRestore) return
         
-        // 設定の復元（統合設定管理対応）
-        if (backupData.settings && settingsManager) {
-          const result = await settingsManager.restoreFromBackup(backupData)
-          if (result.success) {
-            setSettings(backupData.settings)
-          } else {
-            throw new Error(result.error || '設定の復元に失敗しました')
-          }
+        // 設定の復元（JSON システム対応）
+        if (backupData.settings) {
+          setSettings(backupData.settings)
+          localStorage.setItem('tokiwa-game-settings', JSON.stringify(backupData.settings))
         }
         
         // localStorageの復元
@@ -264,10 +204,7 @@ export default function SettingsPage() {
           })
         }
         
-        addNotification({
-          type: 'success',
-          message: '🎉 データの復元が完了しました！'
-        })
+        console.log('🎉 データの復元が完了しました！')
         
         // ページリロードで変更を反映
         setTimeout(() => {
@@ -278,10 +215,7 @@ export default function SettingsPage() {
         
       } catch (error) {
         console.error('データ復元エラー:', error)
-        addNotification({
-          type: 'warning',
-          message: 'データの復元に失敗しました: ' + (error as Error).message
-        })
+        console.error('データの復元に失敗しました: ' + (error as Error).message)
       }
     }
     
@@ -305,10 +239,7 @@ export default function SettingsPage() {
     
     if (userInput === confirmText) {
       try {
-        addNotification({
-          type: 'warning',
-          message: 'ゲームデータのリセットを開始中...'
-        })
+        console.log('ゲームデータのリセットを開始中...')
         
         // localStorageの全ゲーム関連データを削除
         const gameKeys = [
@@ -328,27 +259,10 @@ export default function SettingsPage() {
           console.log(`削除: ${key}`)
         })
         
-        // 設定状態もリセット（統合設定管理対応）
-        if (settingsManager) {
-          const result = await settingsManager.resetToDefaults()
-          if (result.success) {
-            setSettings(DEFAULT_SETTINGS)
-          } else {
-            console.error('設定リセットエラー:', result.error)
-          }
-        } else {
-          setSettings(DEFAULT_SETTINGS)
-        }
+        // 設定状態もリセット（JSON システム対応）
+        setSettings(DEFAULT_SETTINGS)
         
-        // Supabaseデータのクリア（モックモードでない場合）
-        if (!isMockMode) {
-          console.log('Supabaseデータの削除も検討する必要があります')
-        }
-        
-        addNotification({
-          type: 'success',
-          message: '🗑️ ゲームデータのリセットが完了しました'
-        })
+        console.log('🗑️ ゲームデータのリセットが完了しました')
         
         // ホームページにリダイレクト
         setTimeout(() => {
@@ -359,16 +273,10 @@ export default function SettingsPage() {
         
       } catch (error) {
         console.error('データリセットエラー:', error)
-        addNotification({
-          type: 'warning',
-          message: 'データリセット中にエラーが発生しました'
-        })
+        console.error('データリセット中にエラーが発生しました')
       }
     } else if (userInput !== null) {
-      addNotification({
-        type: 'info',
-        message: '確認文字列が正しくありません。リセットを中止しました。'
-      })
+      console.log('確認文字列が正しくありません。リセットを中止しました。')
     }
   }
 
@@ -390,16 +298,16 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-pixel text-retro-gb-dark">ユーザーID</h3>
                 <p className="font-pixel text-sm text-retro-gb-mid">
-                  {user?.id || '未設定'}
+                  JSON-LOCAL-USER
                 </p>
               </div>
             </div>
 
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="font-pixel text-retro-gb-dark">メールアドレス</h3>
+                <h3 className="font-pixel text-retro-gb-dark">ゲーム学園名</h3>
                 <p className="font-pixel text-sm text-retro-gb-mid">
-                  {user?.email || '未設定'}
+                  {gameData?.player?.schoolName || 'トキワシティ訓練所'}
                 </p>
               </div>
             </div>
@@ -408,7 +316,7 @@ export default function SettingsPage() {
               <div>
                 <h3 className="font-pixel text-retro-gb-dark">データモード</h3>
                 <p className="font-pixel text-sm text-retro-gb-mid">
-                  {isMockMode ? 'モックデータ' : 'リアルデータ'}
+                  JSONローカルシステム
                 </p>
               </div>
             </div>
@@ -714,11 +622,9 @@ export default function SettingsPage() {
             <div className="font-pixel text-sm text-retro-gb-mid">
               💾 設定を保存中...
             </div>
-            {!isMockMode && (
-              <div className="font-pixel text-xs text-retro-gb-mid mt-2">
-                データベースに同期中
-              </div>
-            )}
+            <div className="font-pixel text-xs text-retro-gb-mid mt-2">
+              ローカルストレージに保存中
+            </div>
           </div>
         </PixelCard>
       )}

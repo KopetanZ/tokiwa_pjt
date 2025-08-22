@@ -504,8 +504,7 @@ export class GameController {
         success: true,
         message: `${name}を雇用しました！`,
         trainer,
-        cost: hireCost,
-        dbData: insertedTrainer // データベース保存されたデータを含める
+        cost: hireCost
       }
       
     } catch (error) {

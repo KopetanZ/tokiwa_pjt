@@ -2,103 +2,33 @@
 
 import { PixelCard } from '@/components/ui/PixelCard'
 import { PixelButton } from '@/components/ui/PixelButton'
-import { PixelProgressBar } from '@/components/ui/PixelProgressBar'
 import { TrainerCard } from '@/components/trainers/TrainerCard'
 import { TrainerDetailModal } from '@/components/trainers/TrainerDetailModal'
 import { CandidateSelectionModal } from '@/components/trainers/CandidateSelectionModal'
 import { TrainerSummary } from '@/types/trainer'
-import { useGameState, useTrainers, useEconomy } from '@/lib/game-state/hooks'
+import { useAuth, useNotifications } from '@/contexts/GameContext'
+import { useTrainers, useEconomy, useGameDebug } from '@/lib/game-state'
 import { useState, useEffect } from 'react'
+import { TrainerSystem } from '@/lib/game-logic/trainer-system'
 
-// サンプルデータ（モックIDと整合性を保つ）
-const sampleTrainers: TrainerSummary[] = [
-  {
-    id: 'mock-trainer-1',
-    name: 'タケシ',
-    job: {
-      id: 1,
-      name: 'ranger',
-      nameJa: 'レンジャー',
-      level: 4,
-      experience: 320,
-      nextLevelExp: 500,
-      specializations: { capture: 1.25, exploration: 1.15, battle: 0.95 }
-    },
-    status: 'available',
-    party: {
-      pokemonCount: 3,
-      totalLevel: 15,
-      averageLevel: 5
-    },
-    trustLevel: 75,
-    salary: 3600,
-    spritePath: '/sprites/trainers/ranger_m.png'
-  },
-  {
-    id: 'mock-trainer-2', 
-    name: 'カスミ',
-    job: {
-      id: 3,
-      name: 'battler',
-      nameJa: 'バトラー',
-      level: 2,
-      experience: 180,
-      nextLevelExp: 300,
-      specializations: { battle: 1.25, strategy: 1.15, capture: 0.9 }
-    },
-    status: 'on_expedition',
-    party: {
-      pokemonCount: 2,
-      totalLevel: 8,
-      averageLevel: 4
-    },
-    trustLevel: 60,
-    salary: 3000,
-    spritePath: '/sprites/trainers/battler_f.png'
-  },
-  {
-    id: 'mock-trainer-3',
-    name: 'マチス',
-    job: {
-      id: 2,
-      name: 'breeder',
-      nameJa: 'ブリーダー',
-      level: 1,
-      experience: 50,
-      nextLevelExp: 150,
-      specializations: { breeding: 1.30, healing: 1.20, capture: 1.05 }
-    },
-    status: 'training',
-    party: {
-      pokemonCount: 1,
-      totalLevel: 3,
-      averageLevel: 3
-    },
-    trustLevel: 45,
-    salary: 2800,
-    spritePath: '/sprites/trainers/breeder_m.png'
-  }
-]
-
-export default function TrainersPage() {
+export default function TrainersPageNew() {
   const [selectedTab, setSelectedTab] = useState<'all' | 'available' | 'busy'>('all')
   const [showCandidateModal, setShowCandidateModal] = useState(false)
   const [availableCandidates, setAvailableCandidates] = useState<any[]>([])
   const [selectedTrainer, setSelectedTrainer] = useState<TrainerSummary | null>(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
   
-  const { gameData, actions } = useGameState()
-  const { trainers, actions: trainerActions } = useTrainers()
-  const { money, actions: economyActions } = useEconomy()
-  
-  const hireTrainer = trainerActions.hire
-  const getAvailableTrainers = () => trainers.filter(t => t.status === 'available')
+  // 新しいJSONシステムのフック
+  const { user } = useAuth()
+  const { trainers, available, onExpedition, training, total, totalSalary, actions: trainerActions } = useTrainers(user?.id)
+  const { money, actions: economyActions } = useEconomy(user?.id)
+  const { addNotification } = useNotifications()
+  const debug = useGameDebug(user?.id)
   
   // 雇用候補者データの読み込み
   const loadCandidates = async () => {
     try {
-      const { gameController } = await import('@/lib/game-logic')
-      const candidates = gameController.getAvailableTrainerCandidates()
+      const candidates = TrainerSystem.generateTrainerCandidates()
       setAvailableCandidates(candidates)
     } catch (error) {
       console.error('候補者データ読み込みエラー:', error)
@@ -109,31 +39,31 @@ export default function TrainersPage() {
     loadCandidates()
   }, [])
   
-  // JSON システムから取得したトレーナーデータを表示用に変換
-  const displayTrainers = trainers.map(trainer => ({
+  // JSONデータを表示用形式に変換
+  const displayTrainers: TrainerSummary[] = trainers.map(trainer => ({
     id: trainer.id,
     name: trainer.name,
     job: {
       id: 1,
       name: trainer.job,
-      nameJa: trainer.job,
+      nameJa: getJobNameJa(trainer.job),
       level: trainer.level,
       experience: trainer.experience,
       nextLevelExp: trainer.nextLevelExp,
       specializations: { capture: 1.2, exploration: 1.1, battle: 1.0 }
     },
-    status: trainer.status as 'available' | 'on_expedition' | 'training',
+    status: trainer.status === 'resting' ? 'busy' : trainer.status as 'available' | 'on_expedition' | 'injured' | 'training' | 'busy',
     party: {
-      pokemonCount: 2, // デフォルト値
-      totalLevel: trainer.level * 2, // デフォルト値
-      averageLevel: trainer.level // デフォルト値
+      pokemonCount: 2,
+      totalLevel: trainer.level * 2,
+      averageLevel: trainer.level
     },
     trustLevel: trainer.trustLevel,
     salary: trainer.salary,
-    spritePath: `/sprites/trainers/${trainer.job.toLowerCase()}_m.png`
+    spritePath: `/sprites/trainers/${trainer.job}_m.png`
   }))
   
-  const filteredDisplayTrainers = displayTrainers.filter(trainer => {
+  const filteredTrainers = displayTrainers.filter(trainer => {
     if (selectedTab === 'available') return trainer.status === 'available'
     if (selectedTab === 'busy') return trainer.status !== 'available'
     return true
@@ -141,65 +71,91 @@ export default function TrainersPage() {
   
   // 統計計算
   const stats = {
-    total: trainers.length,
-    available: trainers.filter(t => t.status === 'available').length,
-    busy: trainers.filter(t => t.status !== 'available').length,
-    totalSalary: trainers.reduce((sum, t) => sum + t.salary, 0)
+    total,
+    available: available.length,
+    busy: onExpedition.length + training.length,
+    totalSalary
   }
   
+  // 雇用処理（新システム）
   const handleHireTrainer = async (candidate: any) => {
     const { name: trainerName, job, hireCost: cost } = candidate
-    console.log('🎯 雇用処理開始:', { trainerName, job, cost })
+    console.log('🎯 JSON雇用処理開始:', { trainerName, job, cost })
     
     try {
-      // JSON システムを使用して雇用処理
-      const trainerData = {
-        name: trainerName,
-        job: job,
-        level: 1,
-        experience: 0,
-        nextLevelExp: 1000,
-        status: 'available' as const,
-        skills: { capture: 5, exploration: 5, battle: 5, research: 5, healing: 5 },
-        personality: { courage: 5, caution: 5, curiosity: 5, teamwork: 5, independence: 5, compliance: 5 },
-        salary: cost,
+      // 資金チェック
+      if (!economyActions.canAfford(cost)) {
+        addNotification({
+          type: 'error',
+          message: `資金不足です。必要: ₽${cost.toLocaleString()}, 所持: ₽${money.toLocaleString()}`
+        })
+        return
+      }
+      
+      // トレーナー生成
+      const { trainer } = TrainerSystem.hireNewTrainer(trainerName, job as any, 1)
+      
+      // JSONシステムでトレーナー追加（即座にローカル更新）
+      const trainerId = trainerActions.hire({
+        name: trainer.name,
+        job: trainer.job,
+        level: trainer.level,
+        experience: trainer.experience,
+        nextLevelExp: (trainer.level + 1) * 1000,
+        status: 'available',
+        skills: {
+          capture: 5,
+          exploration: 5,
+          battle: 5,
+          research: 5,
+          healing: 5
+        },
+        personality: trainer.personality,
+        salary: 30000, // デフォルト値
         totalEarned: 0,
         totalExpeditions: 0,
         successfulExpeditions: 0,
         pokemonCaught: 0,
-        trustLevel: 50,
+        trustLevel: 50, // デフォルト値
         favoriteLocations: [],
         lastActive: new Date().toISOString(),
         hiredDate: new Date().toISOString()
-      }
-      const result = hireTrainer(trainerData)
+      })
       
-      console.log('📊 雇用処理結果:', result)
+      // 支払い処理（即座にローカル更新）
+      economyActions.updateMoney(-cost)
+      economyActions.addTransaction({
+        type: 'expense',
+        category: 'trainer_hire',
+        amount: cost,
+        description: `${trainerName} 雇用費用`,
+        relatedId: trainerId,
+        timestamp: new Date().toISOString()
+      })
       
-      if (result) {
-        // 支払い処理
-        economyActions.updateMoney(-cost)
-        economyActions.addTransaction({
-          type: 'expense',
-          category: 'trainer_hire',
-          amount: cost,
-          description: `${trainerName}の雇用費`,
-          timestamp: new Date().toISOString()
-        })
-        
-        console.log(`✅ ${trainerName}を雇用しました！（費用: ₽${cost?.toLocaleString()}）`)
-        
-        // 候補者リストから雇用したトレーナーを除外
-        setAvailableCandidates(prev => 
-          prev.filter(c => c.name !== trainerName)
-        )
-        
-        console.log('✅ ローカル状態更新完了 - 新しいトレーナーは派遣に利用可能')
-      } else {
-        console.warn('❌ 雇用失敗: 資金不足または重複')
-      }
+      // 候補者リストから除外
+      setAvailableCandidates(prev => 
+        prev.filter(c => c.name !== trainerName)
+      )
+      
+      addNotification({
+        type: 'success',
+        message: `${trainerName}を雇用しました！（費用: ₽${cost.toLocaleString()}）`
+      })
+      
+      addNotification({
+        type: 'success',
+        message: `${trainerName}が派遣に利用可能になりました！`
+      })
+      
+      console.log('✅ JSON雇用完了 - 即座にUI反映完了')
+      
     } catch (error) {
       console.error('🚨 雇用処理エラー:', error)
+      addNotification({
+        type: 'error',
+        message: '雇用処理中にエラーが発生しました'
+      })
     }
   }
 
@@ -215,19 +171,37 @@ export default function TrainersPage() {
 
   const handleNewTrainerHire = () => {
     setShowCandidateModal(true)
-    console.log('雇用可能なトレーナーリストを表示します')
+    addNotification({
+      type: 'info',
+      message: '雇用可能なトレーナーリストを表示します'
+    })
   }
 
   return (
     <div className="space-y-6">
       {/* ヘッダー */}
       <div className="flex items-center justify-between">
-        <h1 className="font-pixel-large text-retro-gb-dark">
-          トレーナー管理
-        </h1>
-        <PixelButton onClick={handleNewTrainerHire}>
-          新しいトレーナーを雇う
-        </PixelButton>
+        <div>
+          <h1 className="font-pixel-large text-retro-gb-dark">
+            トレーナー管理 
+          </h1>
+          <div className="font-pixel text-xs text-retro-gb-mid">
+            💾 JSONローカル管理 | 所持金: ₽{money.toLocaleString()}
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <PixelButton onClick={handleNewTrainerHire}>
+            新しいトレーナーを雇う
+          </PixelButton>
+          {/* デバッグボタン */}
+          <PixelButton 
+            variant="secondary" 
+            size="sm"
+            onClick={() => debug.actions.addTestTrainer()}
+          >
+            テスト追加
+          </PixelButton>
+        </div>
       </div>
 
       {/* 統計サマリー */}
@@ -283,7 +257,7 @@ export default function TrainersPage() {
 
       {/* トレーナーリスト */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {filteredDisplayTrainers.map(trainer => (
+        {filteredTrainers.map(trainer => (
           <TrainerCard 
             key={trainer.id}
             trainer={trainer}
@@ -292,6 +266,18 @@ export default function TrainersPage() {
             showParty={true}
           />
         ))}
+        {filteredTrainers.length === 0 && (
+          <div className="col-span-2 text-center py-8">
+            <div className="font-pixel text-retro-gb-mid mb-4">
+              {selectedTab === 'available' ? '利用可能なトレーナーがいません' :
+               selectedTab === 'busy' ? '活動中のトレーナーがいません' :
+               'トレーナーがいません'}
+            </div>
+            <PixelButton onClick={handleNewTrainerHire}>
+              トレーナーを雇用する
+            </PixelButton>
+          </div>
+        )}
       </div>
 
       {/* 雇用可能トレーナー */}
@@ -309,6 +295,16 @@ export default function TrainersPage() {
               候補者を確認する
             </PixelButton>
           </div>
+        </div>
+      </PixelCard>
+
+      {/* デバッグ情報 */}
+      <PixelCard title="システム情報">
+        <div className="font-pixel text-xs text-retro-gb-mid space-y-1">
+          <div>💾 データサイズ: {(debug.dataSize / 1024).toFixed(1)}KB</div>
+          <div>🔄 JSONローカル管理</div>
+          <div>⚡ リアルタイム更新: 有効</div>
+          <div>🌐 オフライン動作: 対応</div>
         </div>
       </PixelCard>
 
@@ -330,4 +326,16 @@ export default function TrainersPage() {
       />
     </div>
   )
+}
+
+// ユーティリティ関数
+function getJobNameJa(job: string): string {
+  const jobNames: Record<string, string> = {
+    ranger: 'レンジャー',
+    breeder: 'ブリーダー',
+    researcher: 'リサーチャー',
+    battler: 'バトラー',
+    medic: 'メディック'
+  }
+  return jobNames[job] || job
 }
