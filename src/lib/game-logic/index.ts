@@ -1248,6 +1248,21 @@ export class GameController {
     
     console.log('🔄 ゲームリセット完了')
   }
+
+  /**
+   * 初期トレーナーを復元
+   */
+  restoreInitialTrainers(): void {
+    try {
+      // GameStateManagerのインスタンスを取得して初期トレーナーを復元
+      const { getGameStateManager } = require('@/lib/game-state/GameStateManager')
+      const gameManager = getGameStateManager()
+      gameManager.restoreInitialTrainers()
+      console.log('✅ 初期トレーナー復元完了')
+    } catch (error) {
+      console.error('❌ 初期トレーナー復元エラー:', error)
+    }
+  }
 }
 
 // グローバルインスタンス

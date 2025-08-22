@@ -284,6 +284,14 @@ export class GameStateManager {
         // 今後、マイグレーション処理を追加
       }
       
+      // 初期トレーナーが存在しない場合は追加
+      if (data.trainers.length === 0) {
+        console.log('🆕 初期トレーナーが存在しないため、追加します')
+        const initialTrainers = this.createInitialTrainers()
+        data.trainers.push(...initialTrainers)
+        this.markDirty()
+      }
+      
       console.log('📂 ゲームデータをローカル読み込み:', {
         version: data.version,
         lastSaved: data.lastSaved,
@@ -304,6 +312,74 @@ export class GameStateManager {
   private createNewGame(userId: string): GameData {
     console.log('🎮 新しいゲームを作成:', { userId })
     return createInitialGameData(userId, 'プレイヤー', 'トキワシティ訓練所')
+  }
+
+  /**
+   * 初期トレーナーを作成
+   */
+  private createInitialTrainers(): Trainer[] {
+    return [
+      {
+        id: 'mock-trainer-1',
+        name: 'タケシ',
+        job: 'ranger',
+        level: 4,
+        experience: 320,
+        nextLevelExp: 500,
+        status: 'available',
+        skills: { capture: 8, exploration: 7, battle: 6, research: 5, healing: 4 },
+        personality: { courage: 7, caution: 3, curiosity: 8, teamwork: 6, independence: 4, compliance: 5 },
+        salary: 3600,
+        totalEarned: 14400,
+        totalExpeditions: 12,
+        successfulExpeditions: 10,
+        pokemonCaught: 15,
+        trustLevel: 75,
+        favoriteLocations: [1, 2, 3],
+        hiredDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30日前
+        lastActive: new Date().toISOString()
+      },
+      {
+        id: 'mock-trainer-2',
+        name: 'カスミ',
+        job: 'battler',
+        level: 2,
+        experience: 180,
+        nextLevelExp: 300,
+        status: 'on_expedition',
+        skills: { capture: 5, exploration: 4, battle: 8, research: 3, healing: 2 },
+        personality: { courage: 8, caution: 2, curiosity: 6, teamwork: 7, independence: 5, compliance: 4 },
+        salary: 3000,
+        totalEarned: 9000,
+        totalExpeditions: 8,
+        successfulExpeditions: 6,
+        pokemonCaught: 8,
+        trustLevel: 60,
+        favoriteLocations: [2, 4],
+        hiredDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), // 20日前
+        lastActive: new Date().toISOString()
+      },
+      {
+        id: 'mock-trainer-3',
+        name: 'マチス',
+        job: 'breeder',
+        level: 1,
+        experience: 50,
+        nextLevelExp: 150,
+        status: 'training',
+        skills: { capture: 6, exploration: 4, battle: 3, research: 7, healing: 8 },
+        personality: { courage: 4, caution: 8, curiosity: 9, teamwork: 8, independence: 3, compliance: 7 },
+        salary: 2800,
+        totalEarned: 5600,
+        totalExpeditions: 5,
+        successfulExpeditions: 4,
+        pokemonCaught: 6,
+        trustLevel: 45,
+        favoriteLocations: [1, 5],
+        hiredDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15日前
+        lastActive: new Date().toISOString()
+      }
+    ]
   }
   
   // =================== ユーティリティ ===================
@@ -401,6 +477,28 @@ export class GameStateManager {
       console.error('❌ データインポートエラー:', error)
       return false
     }
+  }
+
+  /**
+   * 初期トレーナーを復元
+   */
+  restoreInitialTrainers(): void {
+    console.log('🔄 初期トレーナーを復元します')
+    
+    // 既存の初期トレーナーIDを持つトレーナーを削除
+    this.data.trainers = this.data.trainers.filter(t => 
+      !t.id.startsWith('mock-trainer-')
+    )
+    
+    // 初期トレーナーを追加
+    const initialTrainers = this.createInitialTrainers()
+    this.data.trainers.push(...initialTrainers)
+    
+    this.markDirty()
+    this.notifyListeners()
+    this.saveToLocal()
+    
+    console.log('✅ 初期トレーナー復元完了:', initialTrainers.map(t => t.name))
   }
   
   /**

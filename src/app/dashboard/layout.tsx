@@ -15,22 +15,32 @@ export default function DashboardLayout({
   const { isAuthenticated, user, isMockMode, isLoading } = useAuth()
   const router = useRouter()
 
-  console.log('🏗️ DashboardLayout: レンダリング', { isAuthenticated, isLoading })
+  // 開発環境でのみログ出力
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🏗️ DashboardLayout: レンダリング', { isAuthenticated, isLoading })
+  }
 
   // 開発モード: 認証をスキップ
   const isDevelopment = process.env.NODE_ENV === 'development'
   
   useEffect(() => {
-    console.log('🏗️ DashboardLayout: useEffect実行', { isAuthenticated, isLoading, isDevelopment })
+    // 開発環境でのみログ出力
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🏗️ DashboardLayout: useEffect実行', { isAuthenticated, isLoading, isDevelopment })
+    }
     if (!isDevelopment && !isLoading && !isAuthenticated) {
-      console.log('🏗️ DashboardLayout: 認証されていない、ホームにリダイレクト')
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🏗️ DashboardLayout: 認証されていない、ホームにリダイレクト')
+      }
       router.push('/')
     }
-  }, [isAuthenticated, isLoading, router, isDevelopment])
+  }, [isAuthenticated, isLoading, isDevelopment])
 
   // ローディング中の表示
   if (isLoading) {
-    console.log('🏗️ DashboardLayout: ローディング中を表示')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🏗️ DashboardLayout: ローディング中を表示')
+    }
     return (
       <GameBoyScreen>
         <div className="flex items-center justify-center min-h-screen">
@@ -46,7 +56,9 @@ export default function DashboardLayout({
 
   // 認証されていない場合（本番環境のみ）
   if (!isDevelopment && !isAuthenticated) {
-    console.log('🏗️ DashboardLayout: 認証されていない、エラー表示')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🏗️ DashboardLayout: 認証されていない、エラー表示')
+    }
     return (
       <GameBoyScreen>
         <div className="flex items-center justify-center min-h-screen">
@@ -59,7 +71,10 @@ export default function DashboardLayout({
     )
   }
 
-  console.log('🏗️ DashboardLayout: メインレイアウトを表示')
+  // 開発環境でのみログ出力
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🏗️ DashboardLayout: メインレイアウトを表示')
+  }
   return (
     <GameBoyScreen>
       <div className="min-h-screen flex flex-col">

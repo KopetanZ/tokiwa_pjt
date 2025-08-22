@@ -312,6 +312,34 @@ export default function TrainersPage() {
         </div>
       </PixelCard>
 
+      {/* 初期トレーナー復元ボタン（開発環境のみ） */}
+      {process.env.NODE_ENV === 'development' && (
+        <PixelCard title="🔧 デバッグ機能">
+          <div className="space-y-4">
+            <div className="font-pixel text-xs text-retro-gb-mid">
+              初期トレーナー（タケシ、カスミ、マチス）を復元します
+            </div>
+            <PixelButton 
+              variant="secondary" 
+              onClick={async () => {
+                try {
+                  const { gameController } = await import('@/lib/game-logic')
+                  gameController.restoreInitialTrainers()
+                  // 少し待ってからページをリロード
+                  setTimeout(() => {
+                    window.location.reload()
+                  }, 1000)
+                } catch (error) {
+                  console.error('初期トレーナー復元エラー:', error)
+                }
+              }}
+            >
+              初期トレーナーを復元
+            </PixelButton>
+          </div>
+        </PixelCard>
+      )}
+
       {/* トレーナー詳細モーダル */}
       {selectedTrainer && (
         <TrainerDetailModal

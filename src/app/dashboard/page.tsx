@@ -57,7 +57,7 @@ export default function DashboardPage() {
     // 30秒ごとに更新
     const interval = setInterval(loadGameStats, UI.REFRESH_INTERVAL)
     return () => clearInterval(interval)
-  }, [])
+  }, [isMockMode])
 
   // クイックアクションハンドラー
   const handleNewExpedition = () => {
@@ -122,7 +122,7 @@ export default function DashboardPage() {
     }, 1000)
     
     setEmergencyTimer(timer)
-  }, [emergencyTimer, addNotification])
+  }, [addNotification])
 
   // 緊急イベント生成
   const generateEmergencyEvent = useCallback(() => {
@@ -173,7 +173,7 @@ export default function DashboardPage() {
         clearInterval(emergencyTimer)
       }
     }
-  }, [showEmergency, emergencyTimer])
+  }, [showEmergency, generateEmergencyEvent, emergencyTimer])
 
   // 緊急通知ハンドラー（改良版）
   const handleEmergencyChoice = async (choice: 'capture' | 'observe' | 'ignore') => {
@@ -234,11 +234,16 @@ export default function DashboardPage() {
   const handleCapturePokemon = () => handleEmergencyChoice('capture')
   const handleMissPokemon = () => handleEmergencyChoice('ignore')
 
-  console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, isAuthenticated, isMockMode, gameDataLoaded: !!gameData })
+  // 開発環境でのみログ出力
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📊 DashboardPage: レンダリング', { user: !!user, isLoading, isAuthenticated, isMockMode, gameDataLoaded: !!gameData })
+  }
 
   // ローディング中の表示
   if (isLoading) {
-    console.log('📊 DashboardPage: ローディング中を表示')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 DashboardPage: ローディング中を表示')
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
@@ -266,7 +271,9 @@ export default function DashboardPage() {
   // ユーザーが存在しない場合（開発環境では表示を続行）
   const isDevelopment = process.env.NODE_ENV === 'development'
   if (!user && !isDevelopment) {
-    console.log('📊 DashboardPage: ユーザーが存在しない、エラー表示')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('📊 DashboardPage: ユーザーが存在しない、エラー表示')
+    }
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center space-y-4">
@@ -279,7 +286,10 @@ export default function DashboardPage() {
     )
   }
 
-  console.log('📊 DashboardPage: メインコンテンツを表示', { user, isMockMode, hasGameData: !!safeGameData })
+  // 開発環境でのみログ出力
+  if (process.env.NODE_ENV === 'development') {
+    console.log('📊 DashboardPage: メインコンテンツを表示', { user, isMockMode, hasGameData: !!safeGameData })
+  }
 
   // 開発環境でユーザーがいない場合の初期化案内
   if (isDevelopment && !user && !isMockMode) {

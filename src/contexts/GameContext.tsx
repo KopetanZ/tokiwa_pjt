@@ -456,6 +456,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return !state.isMockMode && state.isAuthenticated && !!state.user?.id
   }, [state.isMockMode, state.isAuthenticated, state.user?.id])
 
+  // 前回の状態を記録して無限ループを防ぐ
+  const prevStateRef = useRef({
+    isMockMode: state.isMockMode,
+    hasUser: !!state.user,
+    shouldUseRealData
+  })
+
   // デバッグ用ログ（本番環境では削除）
   const prevShouldUseRealDataRef = useRef(shouldUseRealData)
   useEffect(() => {
@@ -501,7 +508,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
       // 認証状態変更の監視
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        console.log('🔐 GameContext: 認証状態変更:', event, session?.user?.email)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔐 GameContext: 認証状態変更:', event, session?.user?.email)
+        }
         
         if (event === 'SIGNED_IN' && session?.user) {
           dispatch({ type: 'SET_USER', payload: session.user })
@@ -534,6 +543,25 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   // データソース判定とゲームデータ同期
   useEffect(() => {
+    // 無限ループを防ぐため、前回の状態と比較
+    const currentState = {
+      isMockMode: state.isMockMode,
+      hasUser: !!state.user,
+      shouldUseRealData
+    }
+    
+    // 状態が変更されていない場合は処理をスキップ
+    if (
+      prevStateRef.current.isMockMode === currentState.isMockMode &&
+      prevStateRef.current.hasUser === currentState.hasUser &&
+      prevStateRef.current.shouldUseRealData === currentState.shouldUseRealData
+    ) {
+      return
+    }
+    
+    // 前回の状態を更新
+    prevStateRef.current = currentState
+    
     if (state.isMockMode || (!state.user && !shouldUseRealData)) {
       // モックモードまたは未認証の場合はJSONシステムからデータを取得
       const jsonGameData: GameContextState['gameData'] = {
@@ -593,13 +621,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, [
     state.user?.id, 
     state.isMockMode, 
-    shouldUseRealData,
-    jsonGameStateHook.gameData,
-    jsonTrainersHook.trainers,
-    jsonExpeditionsHook.expeditions,
-    jsonEconomyHook.money,
-    jsonEconomyHook.transactions,
-    gameStateHook
+    shouldUseRealData
   ])
 
   // 進行状況マネージャーの初期化
