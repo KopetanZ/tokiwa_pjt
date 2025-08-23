@@ -3,9 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuth } from '@/contexts/GameContext'
-import { supabase } from '@/lib/supabase'
-import { useNotifications } from '@/contexts/GameContext'
+import { useAuth } from '../providers/AuthProvider'
 
 export function AuthWelcomeScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signup')
@@ -13,219 +11,73 @@ export function AuthWelcomeScreen() {
   const [password, setPassword] = useState('')
   const [trainerName, setTrainerName] = useState('')
   const [schoolName, setSchoolName] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
-  const { user, isAuthenticated, enableMockMode } = useAuth()
-  const { addNotification } = useNotifications()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuth()
   const isDevelopment = process.env.NODE_ENV === 'development'
+
+  const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 5000)
+  }
 
   const handleSignUp = async () => {
     if (!email.trim() || !password.trim() || !trainerName.trim() || !schoolName.trim()) {
-      addNotification({
-        type: 'warning',
-        message: 'すべての項目を入力してください'
-      })
+      showNotification('warning', 'すべての項目を入力してください')
       return
     }
 
     if (password.length < 6) {
-      addNotification({
-        type: 'error', 
-        message: 'パスワードは6文字以上で入力してください'
-      })
+      showNotification('error', 'パスワードは6文字以上で入力してください')
       return
     }
 
     if (!email.includes('@')) {
-      addNotification({
-        type: 'error',
-        message: '正しいメールアドレスを入力してください'
-      })
+      showNotification('error', '正しいメールアドレスを入力してください')
       return
     }
 
-    setIsLoading(true)
     try {
-      console.log('🔧 サインアップを試行中...', { email: email.trim(), isDevelopment })
-
-      if (!supabase) {
-        throw new Error('Supabase client is not initialized')
+      await signUp(email, password, trainerName, schoolName)
+      if (!error) {
+        showNotification('success', `${schoolName}へようこそ、${trainerName}館長！`)
       }
-
-      const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
-        password: password.trim(),
-        options: {
-          data: {
-            trainer_name: trainerName.trim(),
-            school_name: schoolName.trim()
-          }
-        }
-      })
-
-      if (error) {
-        console.error('🚨 サインアップエラー詳細:', {
-          message: error.message,
-          status: error.status,
-          name: error.name
-        })
-
-        // 開発環境では詳細なエラー情報を表示
-        if (isDevelopment) {
-          addNotification({
-            type: 'error',
-            message: `開発環境エラー: ${error.message}`
-          })
-          
-          // データベースエラーの場合は代替手段を提示
-          if (error.message.includes('Database error') || error.message.includes('saving new user')) {
-            addNotification({
-              type: 'warning',
-              message: 'Supabaseデータベースの設定が必要です。開発環境では「🎮 クイックスタート」ボタンをご利用ください。'
-            })
-          }
-        } else {
-          addNotification({
-            type: 'error',
-            message: 'サインアップに失敗しました'
-          })
-        }
-        return
-      }
-
-      if (data.user) {
-        addNotification({
-          type: 'success',
-          message: `${schoolName}へようこそ、${trainerName}館長！`
-        })
-        
-        // メール確認が必要な場合
-        if (!data.session) {
-          addNotification({
-            type: 'info',
-            message: 'メールを確認してアカウントを有効化してください'
-          })
-        } else {
-          // セッションがある場合は即座にダッシュボードへ
-          setTimeout(() => {
-            window.location.href = '/dashboard'
-          }, 1500)
-        }
-      }
-    } catch (error: any) {
-      console.error('🚨 予期しないサインアップエラー:', error)
-      addNotification({
-        type: 'error',
-        message: isDevelopment ? `開発エラー: ${error.message}` : 'サインアップに失敗しました'
-      })
-    } finally {
-      setIsLoading(false)
+    } catch (err) {
+      // エラーはAuthProviderで処理される
     }
   }
 
   const handleSignIn = async () => {
     if (!email.trim() || !password.trim()) {
-      addNotification({
-        type: 'warning',
-        message: 'メールアドレスとパスワードを入力してください'
-      })
+      showNotification('warning', 'メールアドレスとパスワードを入力してください')
       return
     }
 
-    setIsLoading(true)
     try {
-      console.log('🔧 サインインを試行中...', { email: email.trim(), isDevelopment })
-
-      if (!supabase) {
-        throw new Error('Supabase client is not initialized')
+      await signIn(email, password)
+      if (!error) {
+        showNotification('success', 'おかえりなさい！')
       }
-
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim()
-      })
-
-      if (error) {
-        console.error('🚨 サインインエラー詳細:', {
-          message: error.message,
-          status: error.status,
-          name: error.name
-        })
-
-        // 開発環境では詳細なエラー情報を表示
-        if (isDevelopment) {
-          addNotification({
-            type: 'error',
-            message: `開発環境エラー: ${error.message}`
-          })
-          
-          // 認証情報が無効な場合は代替手段を提示
-          if (error.message.includes('Invalid login credentials')) {
-            addNotification({
-              type: 'info',
-              message: 'まだアカウントが作成されていない可能性があります。クイックスタートをお試しください。'
-            })
-          }
-        } else {
-          addNotification({
-            type: 'error',
-            message: 'ログインに失敗しました。メールアドレスとパスワードを確認してください。'
-          })
-        }
-        return
-      }
-
-      if (data.user) {
-        console.log('✅ サインイン成功:', data.user.email)
-        addNotification({
-          type: 'success',
-          message: `おかえりなさい！`
-        })
-        
-        // ダッシュボードにリダイレクト
-        setTimeout(() => {
-          window.location.href = '/dashboard'
-        }, 1000)
-      }
-    } catch (error: any) {
-      console.error('🚨 予期しないサインインエラー:', error)
-      addNotification({
-        type: 'error',
-        message: isDevelopment ? `開発エラー: ${error.message}` : 'ログインに失敗しました'
-      })
-    } finally {
-      setIsLoading(false)
+    } catch (err) {
+      // エラーはAuthProviderで処理される
     }
   }
 
-  const handleQuickStart = () => {
-    console.log('🎮 開発環境クイックスタート - モックモード有効化')
-    
-    // モックモードを有効化
-    enableMockMode()
-    
-    // 通知を表示
-    addNotification({
-      type: 'success',
-      message: '🎮 開発モードでゲームを開始しました！'
-    })
-    
-    // ダッシュボードへリダイレクト
-    setTimeout(() => {
-      window.location.href = '/dashboard'
-    }, 500)
+  const handleQuickStart = async () => {
+    try {
+      await createGuestSession('開発者', 'テスト学校')
+      showNotification('success', '🎮 開発モードでゲームを開始しました！')
+    } catch (err) {
+      showNotification('error', '開発モードの開始に失敗しました')
+    }
   }
 
-  // 認証済みの場合はダッシュボードにリダイレクト
+  // エラー表示の監視
   useEffect(() => {
-    if (isAuthenticated) {
-      const timer = setTimeout(() => {
-        window.location.href = '/dashboard'
-      }, 100)
-      
-      return () => clearTimeout(timer)
+    if (error) {
+      showNotification('error', error)
     }
-  }, [isAuthenticated])
+  }, [error])
   
   if (isAuthenticated) {
     return (
@@ -245,6 +97,18 @@ export function AuthWelcomeScreen() {
 
   return (
     <div className="max-w-md mx-auto space-y-8 p-6">
+      {/* 通知表示 */}
+      {notification && (
+        <div className={`p-3 border-2 text-center font-pixel text-sm ${
+          notification.type === 'success' ? 'bg-green-100 border-green-500 text-green-800' :
+          notification.type === 'error' ? 'bg-red-100 border-red-500 text-red-800' :
+          notification.type === 'warning' ? 'bg-yellow-100 border-yellow-500 text-yellow-800' :
+          'bg-blue-100 border-blue-500 text-blue-800'
+        }`}>
+          {notification.message}
+        </div>
+      )}
+
       {/* タイトル */}
       <div className="text-center space-y-4">
         <div className="font-pixel-xl text-retro-gb-dark">

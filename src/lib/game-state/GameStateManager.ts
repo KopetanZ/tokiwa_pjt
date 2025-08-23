@@ -100,6 +100,13 @@ export class GameStateManager {
       ...pokemon,
       id,
       caughtDate: new Date().toISOString()
+      // lastActive: removed - not part of Pokemon interface
+    }
+    
+    // 初期状態の確認と修正
+    if (newPokemon.status === 'injured' || newPokemon.status === 'sick') {
+      newPokemon.status = 'healthy'
+      console.log('🔄 ポケモンの状態を健康に修正:', newPokemon.name)
     }
     
     this.data.pokemon.push(newPokemon)
@@ -108,6 +115,83 @@ export class GameStateManager {
     
     console.log('✅ ポケモン追加:', newPokemon.name)
     return id
+  }
+
+  /**
+   * ポケモン情報を更新
+   */
+  updatePokemon(id: string, updates: Partial<Pokemon>): boolean {
+    const index = this.data.pokemon.findIndex(p => p.id === id)
+    if (index === -1) return false
+    
+    this.data.pokemon[index] = {
+      ...this.data.pokemon[index],
+      ...updates
+      // lastActive: removed - not part of Pokemon interface  
+    }
+    
+    this.markDirty()
+    this.notifyListeners()
+    return true
+  }
+
+  /**
+   * ポケモンの状態を回復
+   */
+  healPokemon(id: string): boolean {
+    const pokemon = this.data.pokemon.find(p => p.id === id)
+    if (!pokemon) return false
+    
+    if (pokemon.status === 'healthy') {
+      console.log('ℹ️ ポケモンは既に健康です:', pokemon.name)
+      return true
+    }
+    
+    // 状態を健康に回復
+    pokemon.status = 'healthy'
+    pokemon.hp = pokemon.maxHp
+    
+    this.markDirty()
+    this.notifyListeners()
+    
+    console.log('💚 ポケモンを回復しました:', pokemon.name)
+    return true
+  }
+
+  /**
+   * 全ポケモンの状態を回復
+   */
+  healAllPokemon(): number {
+    let healedCount = 0
+    
+    this.data.pokemon.forEach(pokemon => {
+      if (pokemon.status !== 'healthy' || pokemon.hp < pokemon.maxHp) {
+        pokemon.status = 'healthy'
+        pokemon.hp = pokemon.maxHp
+        healedCount++
+      }
+    })
+    
+    if (healedCount > 0) {
+      this.markDirty()
+      this.notifyListeners()
+      console.log(`💚 ${healedCount}匹のポケモンを回復しました`)
+    }
+    
+    return healedCount
+  }
+
+  /**
+   * ポケモンの状態をチェック
+   */
+  getPokemonStatus(): { healthy: number; injured: number; sick: number; training: number } {
+    const status = { healthy: 0, injured: 0, sick: 0, training: 0 }
+    
+    this.data.pokemon.forEach(pokemon => {
+      status[pokemon.status]++
+    })
+    
+    return status
   }
   
   /**
@@ -292,6 +376,14 @@ export class GameStateManager {
         this.markDirty()
       }
       
+      // 初期ポケモンが存在しない場合は追加
+      if (data.pokemon.length === 0) {
+        console.log('🆕 初期ポケモンが存在しないため、追加します')
+        const initialPokemon = this.createInitialPokemon()
+        data.pokemon.push(...initialPokemon)
+        this.markDirty()
+      }
+      
       console.log('📂 ゲームデータをローカル読み込み:', {
         version: data.version,
         lastSaved: data.lastSaved,
@@ -346,7 +438,7 @@ export class GameStateManager {
         level: 2,
         experience: 180,
         nextLevelExp: 300,
-        status: 'on_expedition',
+        status: 'available',
         skills: { capture: 5, exploration: 4, battle: 8, research: 3, healing: 2 },
         personality: { courage: 8, caution: 2, curiosity: 6, teamwork: 7, independence: 5, compliance: 4 },
         salary: 3000,
@@ -366,7 +458,7 @@ export class GameStateManager {
         level: 1,
         experience: 50,
         nextLevelExp: 150,
-        status: 'training',
+        status: 'available',
         skills: { capture: 6, exploration: 4, battle: 3, research: 7, healing: 8 },
         personality: { courage: 4, caution: 8, curiosity: 9, teamwork: 8, independence: 3, compliance: 7 },
         salary: 2800,
@@ -378,6 +470,86 @@ export class GameStateManager {
         favoriteLocations: [1, 5],
         hiredDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15日前
         lastActive: new Date().toISOString()
+      }
+    ]
+  }
+
+  /**
+   * 初期ポケモンを作成
+   */
+  private createInitialPokemon(): Pokemon[] {
+    return [
+      {
+        id: 'starter-pikachu',
+        speciesId: 25,
+        name: 'ピカチュウ',
+        nameJa: 'ピカチュウ',
+        level: 5,
+        experience: 0,
+        nextLevelExp: 100,
+        hp: 20,
+        maxHp: 20,
+        attack: 12,
+        defense: 8,
+        specialAttack: 10,
+        specialDefense: 8,
+        speed: 15,
+        status: 'healthy',
+        moves: ['でんこうせっか', 'しっぽをふる', 'なきごえ'],
+        ivs: { hp: 15, attack: 14, defense: 13, specialAttack: 12, specialDefense: 11, speed: 16 },
+        nature: 'がんばりや',
+        caughtDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1週間前
+        caughtLocation: 1,
+        caughtBy: 'mock-trainer-1',
+        originalTrainer: 'タケシ'
+      },
+      {
+        id: 'starter-eevee',
+        speciesId: 133,
+        name: 'イーブイ',
+        nameJa: 'イーブイ',
+        level: 3,
+        experience: 0,
+        nextLevelExp: 80,
+        hp: 16,
+        maxHp: 16,
+        attack: 10,
+        defense: 9,
+        specialAttack: 8,
+        specialDefense: 9,
+        speed: 12,
+        status: 'healthy',
+        moves: ['でんこうせっか', 'しっぽをふる', 'なきごえ'],
+        ivs: { hp: 14, attack: 13, defense: 15, specialAttack: 11, specialDefense: 12, speed: 13 },
+        nature: 'おだやか',
+        caughtDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5日前
+        caughtLocation: 2,
+        caughtBy: 'mock-trainer-2',
+        originalTrainer: 'カスミ'
+      },
+      {
+        id: 'starter-charmander',
+        speciesId: 4,
+        name: 'ヒトカゲ',
+        nameJa: 'ヒトカゲ',
+        level: 4,
+        experience: 0,
+        nextLevelExp: 90,
+        hp: 18,
+        maxHp: 18,
+        attack: 11,
+        defense: 7,
+        specialAttack: 12,
+        specialDefense: 8,
+        speed: 13,
+        status: 'healthy',
+        moves: ['ひのこ', 'なきごえ', 'かえんだん'],
+        ivs: { hp: 13, attack: 16, defense: 10, specialAttack: 15, specialDefense: 9, speed: 14 },
+        nature: 'いじっぱり',
+        caughtDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3日前
+        caughtLocation: 3,
+        caughtBy: 'mock-trainer-3',
+        originalTrainer: 'マチス'
       }
     ]
   }

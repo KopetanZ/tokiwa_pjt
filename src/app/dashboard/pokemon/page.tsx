@@ -11,114 +11,207 @@ import { gameController } from '@/lib/game-logic'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
-// Pokemon interface for this page (simplified)
+// Pokemon interface for this page (simplified but compatible with PokemonInstance)
 interface SimplePokemon {
   id: string
+  speciesId: number
   dexNumber: number
   name: string
+  nameJa: string
   nameEn: string
   level: number
+  experience: number
+  nextLevelExp: number
   hp: number
   maxHp: number
   attack: number
   defense: number
+  specialAttack: number
+  specialDefense: number
   speed: number
   types: string[]
   nature: string
   ability: string
   status: 'available' | 'on_expedition' | 'injured' | 'training'
+  moves: string[]
+  ivs: {
+    hp: number
+    attack: number
+    defense: number
+    specialAttack: number
+    specialDefense: number
+    speed: number
+  }
+  caughtDate: string
+  caughtLocation: number
+  caughtBy: string
+  originalTrainer: string
   trainerId: string | null
   friendship: number
-  moves: string[]
-  experience: number
-  nextLevelExp: number
+  rarity?: 'common' | 'uncommon' | 'rare' | 'legendary' | 'mythical'
+}
+
+// Status mapping helper
+const mapPokemonStatus = (status: string): 'available' | 'on_expedition' | 'injured' | 'training' => {
+  switch (status) {
+    case 'healthy': return 'available'
+    case 'sick':
+    case 'injured': return 'injured'
+    case 'training': return 'training'
+    default: return 'available'
+  }
 }
 
 // サンプルポケモンデータ（モックIDと整合性を保つ）
 const samplePokemon: SimplePokemon[] = [
   {
     id: 'mock-pokemon-1',
+    speciesId: 25,
     dexNumber: 25,
     name: 'ピカチュウ',
+    nameJa: 'ピカチュウ',
     nameEn: 'pikachu',
     level: 12,
+    experience: 1580,
+    nextLevelExp: 1728,
     hp: 35,
     maxHp: 35,
     attack: 24,
     defense: 18,
+    specialAttack: 20,
+    specialDefense: 20,
     speed: 30,
     types: ['electric'],
     nature: 'やんちゃ',
     ability: 'せいでんき',
     status: 'available',
+    moves: ['でんきショック', 'でんこうせっか', 'しっぽをふる', 'なきごえ'],
+    ivs: {
+      hp: 15,
+      attack: 12,
+      defense: 8,
+      specialAttack: 14,
+      specialDefense: 10,
+      speed: 18
+    },
+    caughtDate: '2024-01-15T10:30:00Z',
+    caughtLocation: 1,
+    caughtBy: 'player',
+    originalTrainer: 'player',
     trainerId: null,
     friendship: 85,
-    moves: ['でんきショック', 'でんこうせっか', 'しっぽをふる', 'なきごえ'],
-    experience: 1580,
-    nextLevelExp: 1728
+    rarity: 'common'
   },
   {
     id: 'mock-pokemon-2', 
+    speciesId: 1,
     dexNumber: 1,
     name: 'フシギダネ',
+    nameJa: 'フシギダネ',
     nameEn: 'bulbasaur',
     level: 8,
+    experience: 512,
+    nextLevelExp: 729,
     hp: 22,
     maxHp: 22,
     attack: 16,
     defense: 16,
+    specialAttack: 18,
+    specialDefense: 18,
     speed: 14,
     types: ['grass', 'poison'],
     nature: 'おだやか',
     ability: 'しんりょく',
     status: 'on_expedition',
-    trainerId: 'mock-trainer-1',
-    friendship: 70,
     moves: ['はっぱカッター', 'たいあたり', 'なきごえ', 'やどりぎのタネ'],
-    experience: 512,
-    nextLevelExp: 729
+    ivs: {
+      hp: 12,
+      attack: 10,
+      defense: 16,
+      specialAttack: 20,
+      specialDefense: 18,
+      speed: 8
+    },
+    caughtDate: '2024-01-10T14:20:00Z',
+    caughtLocation: 2,
+    caughtBy: 'mock-trainer-1',
+    originalTrainer: 'mock-trainer-1',
+    trainerId: 'mock-trainer-1',
+    friendship: 70
   },
   {
     id: 'mock-pokemon-3',
+    speciesId: 4,
     dexNumber: 4,
     name: 'ヒトカゲ',
+    nameJa: 'ヒトカゲ',
     nameEn: 'charmander',
     level: 6,
+    experience: 216,
+    nextLevelExp: 343,
     hp: 19,
     maxHp: 19,
     attack: 15,
     defense: 12,
+    specialAttack: 16,
+    specialDefense: 14,
     speed: 18,
     types: ['fire'],
     nature: 'いじっぱり',
     ability: 'もうか',
     status: 'injured',
-    trainerId: null,
-    friendship: 60,
     moves: ['ひっかく', 'なきごえ', 'ひのこ'],
-    experience: 216,
-    nextLevelExp: 343
+    ivs: {
+      hp: 10,
+      attack: 18,
+      defense: 8,
+      specialAttack: 12,
+      specialDefense: 10,
+      speed: 16
+    },
+    caughtDate: '2024-01-08T09:15:00Z',
+    caughtLocation: 3,
+    caughtBy: 'player',
+    originalTrainer: 'player',
+    trainerId: null,
+    friendship: 60
   },
   {
     id: 'mock-pokemon-4',
+    speciesId: 7,
     dexNumber: 7,
     name: 'ゼニガメ',
+    nameJa: 'ゼニガメ',
     nameEn: 'squirtle',
     level: 10,
+    experience: 1000,
+    nextLevelExp: 1331,
     hp: 24,
     maxHp: 24,
     attack: 16,
     defense: 20,
+    specialAttack: 15,
+    specialDefense: 18,
     speed: 15,
     types: ['water'],
     nature: 'ひかえめ',
     ability: 'げきりゅう',
     status: 'available',
-    trainerId: null,
-    friendship: 75,
     moves: ['たいあたり', 'しっぽをふる', 'みずでっぽう', 'からにこもる'],
-    experience: 1000,
-    nextLevelExp: 1331
+    ivs: {
+      hp: 14,
+      attack: 8,
+      defense: 22,
+      specialAttack: 16,
+      specialDefense: 20,
+      speed: 10
+    },
+    caughtDate: '2024-01-12T16:45:00Z',
+    caughtLocation: 4,
+    caughtBy: 'player',
+    originalTrainer: 'player',
+    trainerId: null,
+    friendship: 75
   }
 ]
 
@@ -136,24 +229,41 @@ export default function PokemonPage() {
   const pokemon = gameData?.pokemon && gameData.pokemon.length > 0 ? 
     gameData.pokemon.map(p => ({
       id: p.id,
+      speciesId: p.speciesId,
       dexNumber: p.speciesId,
       name: p.name,
+      nameJa: p.nameJa || p.name,
       nameEn: p.name.toLowerCase(),
       level: p.level,
+      experience: p.experience,
+      nextLevelExp: p.nextLevelExp,
       hp: p.hp,
       maxHp: p.maxHp,
       attack: p.attack,
       defense: p.defense,
+      specialAttack: p.specialAttack,
+      specialDefense: p.specialDefense,
       speed: p.speed,
       types: ['normal'], // デフォルト値
       nature: p.nature,
       ability: 'ひでん', // デフォルト値
-      status: p.status as 'available' | 'on_expedition' | 'injured' | 'training',
+      status: mapPokemonStatus(p.status),
+      moves: p.moves || [],
+      ivs: p.ivs || {
+        hp: 15,
+        attack: 15,
+        defense: 15,
+        specialAttack: 15,
+        specialDefense: 15,
+        speed: 15
+      },
+      caughtDate: p.caughtDate,
+      caughtLocation: p.caughtLocation,
+      caughtBy: p.caughtBy,
+      originalTrainer: p.originalTrainer,
       trainerId: null, // デフォルト値
       friendship: 50, // デフォルト値
-      moves: p.moves || [],
-      experience: p.experience,
-      nextLevelExp: p.nextLevelExp
+      rarity: 'common' as const // デフォルト値
     })) : samplePokemon
 
   const filteredPokemon = pokemon.filter(poke => {
@@ -163,7 +273,7 @@ export default function PokemonPage() {
     if (!matchesSearch) return false
     
     if (selectedTab === 'available') return poke.status === 'available'
-    if (selectedTab === 'assigned') return poke.status === 'on_expedition'
+    if (selectedTab === 'assigned') return poke.status === 'on_expedition' || poke.status === 'training'
     if (selectedTab === 'injured') return poke.status === 'injured'
     return true
   })
@@ -171,7 +281,7 @@ export default function PokemonPage() {
   const stats = {
     total: pokemon.length,
     available: pokemon.filter(p => p.status === 'available').length,
-    assigned: pokemon.filter(p => p.status === 'on_expedition').length,
+    assigned: pokemon.filter(p => p.status === 'on_expedition' || p.status === 'training').length,
     injured: pokemon.filter(p => p.status === 'injured').length,
     averageLevel: pokemon.length > 0 ? Math.round(pokemon.reduce((sum, p) => sum + p.level, 0) / pokemon.length) : 0
   }

@@ -13,7 +13,7 @@ export function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated, isLoading: authLoading, login, authMethod } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, createGuestSession, authMethod } = useAuth()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
   const router = useRouter()
@@ -90,7 +90,7 @@ export function WelcomeScreen() {
     setIsLoading(true)
     try {
       console.log('🎮 WelcomeScreen: login関数を呼び出し')
-      await login(guestName, schoolName)
+      await createGuestSession(guestName, schoolName)
       console.log('🎮 WelcomeScreen: ログイン成功')
       console.log(`${schoolName}へようこそ、${guestName}館長！`)
       // ダッシュボードにリダイレクト

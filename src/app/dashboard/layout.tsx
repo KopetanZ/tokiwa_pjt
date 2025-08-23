@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/GameContext'
 import { GameBoyScreen } from '@/components/layout/GameBoyScreen'
 import { PixelNavigation } from '@/components/layout/PixelNavigation'
 import { StatusBar } from '@/components/layout/StatusBar'
+import { FloatingMusicButton } from '@/components/audio/MusicController'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -91,6 +92,9 @@ export default function DashboardLayout({
             {children}
           </main>
         </div>
+        
+        {/* フローティング音楽ボタン */}
+        <FloatingMusicButton />
       </div>
     </GameBoyScreen>
   )

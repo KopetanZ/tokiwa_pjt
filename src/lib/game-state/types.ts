@@ -298,6 +298,12 @@ export interface GameStatistics {
   lastCalculated: string
 }
 
+// ゲームコンテキスト（セーブデータ用）
+export interface GameContext {
+  gameState: GameData
+  user: { id: string; guestName: string; schoolName: string } | null
+}
+
 // 列挙型
 export type TrainerJob = 'ranger' | 'breeder' | 'researcher' | 'battler' | 'medic'
 
@@ -339,48 +345,121 @@ export const createInitialGameData = (userId: string, playerName: string, school
       hiredDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(), // 30日前
       lastActive: new Date().toISOString()
     },
+          {
+        id: 'mock-trainer-2',
+        name: 'カスミ',
+        job: 'battler',
+        level: 2,
+        experience: 180,
+        nextLevelExp: 300,
+        status: 'available',
+        skills: { capture: 5, exploration: 4, battle: 8, research: 3, healing: 2 },
+        personality: { courage: 8, caution: 2, curiosity: 6, teamwork: 7, independence: 5, compliance: 4 },
+        salary: 3000,
+        totalEarned: 9000,
+        totalExpeditions: 8,
+        successfulExpeditions: 6,
+        pokemonCaught: 8,
+        trustLevel: 60,
+        favoriteLocations: [2, 4],
+        hiredDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), // 20日前
+        lastActive: new Date().toISOString()
+      },
+      {
+        id: 'mock-trainer-3',
+        name: 'マチス',
+        job: 'breeder',
+        level: 1,
+        experience: 50,
+        nextLevelExp: 150,
+        status: 'available',
+        skills: { capture: 6, exploration: 4, battle: 3, research: 7, healing: 8 },
+        personality: { courage: 4, caution: 8, curiosity: 9, teamwork: 8, independence: 3, compliance: 7 },
+        salary: 2800,
+        totalEarned: 5600,
+        totalExpeditions: 5,
+        successfulExpeditions: 4,
+        pokemonCaught: 6,
+        trustLevel: 45,
+        favoriteLocations: [1, 5],
+        hiredDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15日前
+        lastActive: new Date().toISOString()
+      }
+  ],
+  pokemon: [
     {
-      id: 'mock-trainer-2',
-      name: 'カスミ',
-      job: 'battler',
-      level: 2,
-      experience: 180,
-      nextLevelExp: 300,
-      status: 'on_expedition',
-      skills: { capture: 5, exploration: 4, battle: 8, research: 3, healing: 2 },
-      personality: { courage: 8, caution: 2, curiosity: 6, teamwork: 7, independence: 5, compliance: 4 },
-      salary: 3000,
-      totalEarned: 9000,
-      totalExpeditions: 8,
-      successfulExpeditions: 6,
-      pokemonCaught: 8,
-      trustLevel: 60,
-      favoriteLocations: [2, 4],
-      hiredDate: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(), // 20日前
-      lastActive: new Date().toISOString()
+      id: 'starter-pikachu',
+      speciesId: 25,
+      name: 'ピカチュウ',
+      nameJa: 'ピカチュウ',
+      level: 5,
+      experience: 0,
+      nextLevelExp: 100,
+      hp: 20,
+      maxHp: 20,
+      attack: 12,
+      defense: 8,
+      specialAttack: 10,
+      specialDefense: 8,
+      speed: 15,
+      status: 'healthy',
+      moves: ['でんこうせっか', 'しっぽをふる', 'なきごえ'],
+      ivs: { hp: 15, attack: 14, defense: 13, specialAttack: 12, specialDefense: 11, speed: 16 },
+      nature: 'がんばりや',
+      caughtDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 1週間前
+      caughtLocation: 1,
+      caughtBy: 'mock-trainer-1',
+      originalTrainer: 'タケシ'
     },
     {
-      id: 'mock-trainer-3',
-      name: 'マチス',
-      job: 'breeder',
-      level: 1,
-      experience: 50,
-      nextLevelExp: 150,
-      status: 'training',
-      skills: { capture: 6, exploration: 4, battle: 3, research: 7, healing: 8 },
-      personality: { courage: 4, caution: 8, curiosity: 9, teamwork: 8, independence: 3, compliance: 7 },
-      salary: 2800,
-      totalEarned: 5600,
-      totalExpeditions: 5,
-      successfulExpeditions: 4,
-      pokemonCaught: 6,
-      trustLevel: 45,
-      favoriteLocations: [1, 5],
-      hiredDate: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(), // 15日前
-      lastActive: new Date().toISOString()
+      id: 'starter-eevee',
+      speciesId: 133,
+      name: 'イーブイ',
+      nameJa: 'イーブイ',
+      level: 3,
+      experience: 0,
+      nextLevelExp: 80,
+      hp: 16,
+      maxHp: 16,
+      attack: 10,
+      defense: 9,
+      specialAttack: 8,
+      specialDefense: 9,
+      speed: 12,
+      status: 'healthy',
+      moves: ['でんこうせっか', 'しっぽをふる', 'なきごえ'],
+      ivs: { hp: 14, attack: 13, defense: 15, specialAttack: 11, specialDefense: 12, speed: 13 },
+      nature: 'おだやか',
+      caughtDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // 5日前
+      caughtLocation: 2,
+      caughtBy: 'mock-trainer-2',
+      originalTrainer: 'カスミ'
+    },
+    {
+      id: 'starter-charmander',
+      speciesId: 4,
+      name: 'ヒトカゲ',
+      nameJa: 'ヒトカゲ',
+      level: 4,
+      experience: 0,
+      nextLevelExp: 90,
+      hp: 18,
+      maxHp: 18,
+      attack: 11,
+      defense: 7,
+      specialAttack: 12,
+      specialDefense: 8,
+      speed: 13,
+      status: 'healthy',
+      moves: ['ひのこ', 'なきごえ', 'かえんだん'],
+      ivs: { hp: 13, attack: 16, defense: 10, specialAttack: 15, specialDefense: 9, speed: 14 },
+      nature: 'いじっぱり',
+      caughtDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3日前
+      caughtLocation: 3,
+      caughtBy: 'mock-trainer-3',
+      originalTrainer: 'マチス'
     }
   ],
-  pokemon: [],
   expeditions: [],
   facilities: [],
   transactions: [],
