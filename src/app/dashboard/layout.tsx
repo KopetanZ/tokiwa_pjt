@@ -35,7 +35,7 @@ export default function DashboardLayout({
       }
       router.push('/')
     }
-  }, [isAuthenticated, isLoading, isDevelopment])
+  }, [isAuthenticated, isLoading, isDevelopment, router])
 
   // ローディング中の表示
   if (isLoading) {

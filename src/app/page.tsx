@@ -2,10 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { GameBoyScreen } from '@/components/layout/GameBoyScreen'
-import dynamic from 'next/dynamic'
+import dynamicImport from 'next/dynamic'
+
+// このページはクライアントサイドでのみレンダリング
+export const dynamic = 'force-dynamic'
 
 // AuthWelcomeScreenを動的インポートしてSSRを無効化
-const AuthWelcomeScreen = dynamic(
+const AuthWelcomeScreen = dynamicImport(
   () => import('@/components/welcome/AuthWelcomeScreen').then(mod => ({ default: mod.AuthWelcomeScreen })),
   { 
     ssr: false,
@@ -25,9 +28,7 @@ const AuthWelcomeScreen = dynamic(
   }
 )
 
-// このページはクライアントサイドでのみレンダリング
-export const dynamicConfig = 'force-dynamic'
-export const revalidate = 0
+
 
 export default function HomePage() {
   const [isClient, setIsClient] = useState(false)

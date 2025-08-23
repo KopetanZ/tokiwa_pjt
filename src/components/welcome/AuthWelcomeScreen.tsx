@@ -24,6 +24,13 @@ export function AuthWelcomeScreen() {
     setIsClient(true)
   }, [])
 
+  // エラー表示の監視
+  useEffect(() => {
+    if (error) {
+      showNotification('error', error)
+    }
+  }, [error])
+
   // サーバーサイドでのプリレンダリング時は何も表示しない
   if (!isClient) {
     return (
@@ -111,13 +118,6 @@ export function AuthWelcomeScreen() {
     }
   }
 
-  // エラー表示の監視
-  useEffect(() => {
-    if (error) {
-      showNotification('error', error)
-    }
-  }, [error])
-  
   if (isAuthenticated) {
     return (
       <div className="text-center space-y-6">
