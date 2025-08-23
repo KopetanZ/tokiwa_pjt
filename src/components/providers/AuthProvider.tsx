@@ -33,6 +33,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoading(true)
         
+        // Vercelデプロイ時の古い認証情報をクリーンアップ
+        if (typeof window !== 'undefined') {
+          const currentUrl = window.location.href
+          const isVercelDeploy = currentUrl.includes('vercel.app') || currentUrl.includes('vercel.com')
+          
+          if (isVercelDeploy) {
+            console.log('🔐 AuthProvider: Vercelデプロイ検出、認証情報をクリーンアップ')
+            safeLocalStorage.removeItem('tokiwa_user')
+            safeLocalStorage.removeItem('supabase.auth.token')
+            safeLocalStorage.removeItem('supabase.auth.expires_at')
+            safeLocalStorage.removeItem('supabase.auth.refresh_token')
+            safeLocalStorage.removeItem('supabase.auth.access_token')
+          }
+        }
+        
         // Supabaseの接続確認
         if (supabase) {
           console.log('🔐 AuthProvider: Supabase認証を使用')
@@ -63,25 +78,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (typeof window !== 'undefined') {
           // ローカルストレージから復元
           const savedUser = safeLocalStorage.getItem('tokiwa_user')
+          console.log('🔐 AuthProvider: ローカルストレージ確認:', { savedUser: !!savedUser })
+          
           if (savedUser) {
             try {
               const parsedUser = JSON.parse(savedUser)
+              console.log('🔐 AuthProvider: パースされたユーザー:', parsedUser)
+              
               if (parsedUser && parsedUser.id && parsedUser.guestName) {
-                console.log('🔐 AuthProvider: ローカルユーザー復元')
+                console.log('🔐 AuthProvider: ローカルユーザー復元成功')
                 setUser(parsedUser)
               } else {
+                console.log('🔐 AuthProvider: 無効なユーザー情報、削除')
                 safeLocalStorage.removeItem('tokiwa_user')
               }
             } catch (error) {
               console.error('🔐 AuthProvider: ユーザー情報のパースエラー:', error)
               safeLocalStorage.removeItem('tokiwa_user')
             }
+          } else {
+            console.log('🔐 AuthProvider: ローカルストレージにユーザー情報なし')
           }
         }
       } catch (error) {
         console.error('🔐 AuthProvider: 初期化エラー:', error)
         setError('認証システムの初期化に失敗しました')
       } finally {
+        console.log('🔐 AuthProvider: 初期化完了', { 
+          user: !!user, 
+          authMethod, 
+          isLoading: false 
+        })
         setIsLoading(false)
       }
     }
@@ -234,10 +261,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function useAuth() {
+export function useAuthProvider() {
   const context = useContext(AuthContext)
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    throw new Error('useAuthProvider must be used within an AuthProvider')
   }
   return context
 }

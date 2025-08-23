@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuth } from '@/components/providers/AuthProvider'
+import { useAuthProvider } from '@/components/providers/AuthProvider'
 // import { useToast } from '@/components/providers/ToastProvider'
 
 export function WelcomeScreen() {
@@ -13,7 +13,7 @@ export function WelcomeScreen() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated, isLoading: authLoading, createGuestSession, authMethod } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading, createGuestSession, authMethod } = useAuthProvider()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
   const router = useRouter()

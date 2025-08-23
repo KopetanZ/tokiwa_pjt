@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuth } from '../providers/AuthProvider'
+import { useAuthProvider } from '../providers/AuthProvider'
 
 export function AuthWelcomeScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signup')
@@ -14,8 +14,8 @@ export function AuthWelcomeScreen() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   const [isClient, setIsClient] = useState(false)
   
-  // クライアントサイドでのみuseAuthを使用
-  const auth = useAuth()
+  // クライアントサイドでのみuseAuthProviderを使用
+  const auth = useAuthProvider()
   const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth || {}
   const isDevelopment = process.env.NODE_ENV === 'development'
 
