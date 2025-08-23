@@ -6,20 +6,6 @@ import { supabase, isSupabaseAvailable } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { safeLocalStorage } from '@/lib/storage'
 
-// GameContextとの連携のためのカスタムフック
-function useGameContextSync() {
-  // GameContextが利用可能な場合のみ使用
-  try {
-    // 動的インポートで循環依存を回避
-    const { useGame } = require('@/contexts/GameContext')
-    const { state, actions } = useGame()
-    return { state, actions }
-  } catch (error) {
-    // GameContextが利用できない場合はnullを返す
-    return { state: null, actions: null }
-  }
-}
-
 interface AuthContextType {
   user: User | null
   isLoading: boolean
@@ -41,9 +27,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   
-  // GameContextとの連携
-  const gameContext = useGameContextSync()
-
   // 初期化処理
   useEffect(() => {
     const initializeAuth = async () => {
@@ -165,22 +148,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // ユーザー状態の変更をGameContextに通知
   useEffect(() => {
-    if (gameContext.actions) {
-      try {
-        if (user) {
-          // ユーザーが認証された場合、GameContextの状態を更新
-          console.log('🔐 AuthProvider: GameContextにユーザー状態を通知', user)
-          // GameContextのアクションを呼び出して状態を更新
-          // 注: ここでは直接的な状態更新は行わず、ログ出力のみ
-        } else {
-          // ユーザーが未認証の場合
-          console.log('🔐 AuthProvider: GameContextに未認証状態を通知')
-        }
-      } catch (error) {
-        console.warn('🔐 AuthProvider: GameContext連携エラー（無視）:', error)
+    // GameContextとの連携は、ユーザー状態が安定してから行う
+    if (user && !isLoading) {
+      console.log('🔐 AuthProvider: ユーザー認証完了', {
+        id: user.id,
+        guestName: user.guestName,
+        schoolName: user.schoolName
+      })
+      
+      // ローカルストレージにユーザー情報を保存
+      if (typeof window !== 'undefined') {
+        safeLocalStorage.setItem('tokiwa_user', JSON.stringify(user))
+      }
+    } else if (!user && !isLoading) {
+      console.log('🔐 AuthProvider: ユーザー未認証')
+      
+      // ローカルストレージからユーザー情報を削除
+      if (typeof window !== 'undefined') {
+        safeLocalStorage.removeItem('tokiwa_user')
       }
     }
-  }, [user, gameContext.actions])
+  }, [user, isLoading])
 
   const signUp = async (email: string, password: string, trainerName: string, schoolName: string) => {
     setError(null)
