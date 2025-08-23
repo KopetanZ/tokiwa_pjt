@@ -8,6 +8,7 @@ import { MOCK_USER, MOCK_GAME_DATA } from '@/lib/mock-data'
 import { useErrorHandler, DatabaseError } from '@/lib/error-handling'
 import { authSessionManager, AuthEventType, SessionState } from '@/lib/auth-integration'
 import { createProgressManager, ProgressManager, GameProgress, GameBalance } from '@/lib/progress-management'
+import { safeLocalStorage } from '@/lib/storage'
 
 // ゲーム状態の型定義
 export interface GameContextState {
@@ -108,6 +109,7 @@ type GameAction =
   | { type: 'SET_PROGRESS_MANAGER'; payload: ProgressManager | null }
   | { type: 'UPDATE_PROGRESS'; payload: GameProgress }
   | { type: 'UPDATE_BALANCE'; payload: GameBalance }
+  | { type: 'UPDATE_UI'; payload: Partial<GameContextState['ui']> }
 
 // 初期状態
 const initialState: GameContextState = {
@@ -387,6 +389,15 @@ function gameReducer(state: GameContextState, action: GameAction): GameContextSt
       return {
         ...state,
         currentBalance: action.payload
+      }
+    
+    case 'UPDATE_UI':
+      return {
+        ...state,
+        ui: {
+          ...state.ui,
+          ...action.payload
+        }
       }
     
     default:
@@ -669,29 +680,51 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer)
   }, [])
 
-  // ローカルストレージから設定読み込み
+  // 設定の保存
+  const saveSettings = useCallback((newSettings: Partial<GameContextState['settings']>) => {
+    const updatedSettings = { ...state.settings, ...newSettings };
+    dispatch({ type: 'UPDATE_SETTINGS', payload: updatedSettings });
+    
+    // ローカルストレージに保存
+    safeLocalStorage.setItem('tokiwa-settings', JSON.stringify(updatedSettings));
+  }, [state.settings]);
+
+  // UI状態の保存
+  const saveUIState = useCallback((uiState: Partial<GameContextState['ui']>) => {
+    const updatedUI = { ...state.ui, ...uiState };
+    dispatch({ type: 'UPDATE_UI', payload: updatedUI });
+    
+    // ローカルストレージに保存
+    safeLocalStorage.setItem('tokiwa-ui', JSON.stringify({
+      currentPage: updatedUI.currentPage,
+      selectedPokemon: updatedUI.selectedPokemon,
+      selectedTrainer: updatedUI.selectedTrainer,
+      selectedExpedition: updatedUI.selectedExpedition,
+      isDarkMode: updatedUI.isDarkMode,
+      soundEnabled: updatedUI.soundEnabled
+    }));
+  }, [state.ui]);
+
+  // 初期化時の設定読み込み
   useEffect(() => {
     try {
-      const savedSettings = localStorage.getItem('tokiwa-settings')
+      // 設定の読み込み
+      const savedSettings = safeLocalStorage.getItem('tokiwa-settings');
       if (savedSettings) {
-        const settings = JSON.parse(savedSettings)
-        dispatch({ type: 'UPDATE_SETTINGS', payload: settings })
+        const parsed = JSON.parse(savedSettings);
+        dispatch({ type: 'UPDATE_SETTINGS', payload: parsed });
       }
 
-      const savedUI = localStorage.getItem('tokiwa-ui')
+      // UI状態の読み込み
+      const savedUI = safeLocalStorage.getItem('tokiwa-ui');
       if (savedUI) {
-        const ui = JSON.parse(savedUI)
-        if (ui.isDarkMode !== undefined) {
-          dispatch({ type: 'TOGGLE_DARK_MODE' })
-        }
-        if (ui.soundEnabled !== undefined) {
-          dispatch({ type: 'TOGGLE_SOUND' })
-        }
+        const parsed = JSON.parse(savedUI);
+        dispatch({ type: 'UPDATE_UI', payload: parsed });
       }
     } catch (error) {
-      console.error('設定読み込みエラー:', error)
+      console.warn('設定の読み込みに失敗しました:', error);
     }
-  }, []) // 依存配列を空にする
+  }, []);
 
   // 設定をローカルストレージに保存
   useEffect(() => {

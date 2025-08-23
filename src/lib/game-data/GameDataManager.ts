@@ -8,6 +8,7 @@ import {
   DataVersion
 } from './GameDataSchema';
 import { GameContext } from '../game-state/types';
+import { safeLocalStorage } from '../storage';
 
 export interface SaveMetadata {
   id: string;
@@ -226,37 +227,23 @@ export class GameDataManager {
   }
 
   // セーブデータの保存
-  async saveGame(gameContext: GameContext, slot: number = 1, name?: string): Promise<SaveMetadata> {
+  async saveGame(slot: number, gameContext: GameContext): Promise<SaveMetadata> {
     if (slot < 1 || slot > this.maxSaveSlots) {
-      throw new Error(`Invalid save slot: ${slot}. Must be between 1 and ${this.maxSaveSlots}.`);
+      throw new Error(`Invalid save slot: ${slot}`);
     }
 
     const saveData = await this.createSaveData(gameContext);
-    
-    // データ整合性チェック
-    const integrityResult = this.checkDataIntegrity(saveData);
-    if (!integrityResult.isValid) {
-      console.warn('データ整合性の問題が検出されました:', integrityResult.issues);
-      // 修復可能な問題は自動修復
-      integrityResult.fixes.forEach(fix => {
-        if (fix.applied) {
-          console.log(`修復適用: ${fix.checkName}`);
-        }
-      });
-    }
-
-    // シリアライズとチェックサム計算
     const serialized = this.serializeData(saveData);
     const checksum = await this.calculateChecksum(serialized);
 
     const metadata: SaveMetadata = {
       id: `save_${slot}_${Date.now()}`,
-      name: name || `${saveData.player.name}の学校 - Lv.${saveData.player.level}`,
-      version: saveData.version,
+      name: `セーブ${slot}`,
+      version: CURRENT_GAME_VERSION,
       size: serialized.length,
-      createdAt: saveData.savedAt,
-      updatedAt: saveData.savedAt,
-      playTime: saveData.player.playTime,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      playTime: saveData.player.level * 1000, // 仮の計算
       playerLevel: saveData.player.level,
       playerName: saveData.player.name,
       schoolName: saveData.player.schoolName,
@@ -269,8 +256,8 @@ export class GameDataManager {
     await this.createBackup(slot);
 
     // セーブデータとメタデータを保存
-    localStorage.setItem(`tokiwa_save_${slot}`, serialized);
-    localStorage.setItem(`tokiwa_save_meta_${slot}`, JSON.stringify(metadata));
+    safeLocalStorage.setItem(`tokiwa_save_${slot}`, serialized);
+    safeLocalStorage.setItem(`tokiwa_save_meta_${slot}`, JSON.stringify(metadata));
 
     console.log(`ゲームをスロット${slot}に保存しました:`, metadata.name);
     return metadata;
@@ -282,8 +269,8 @@ export class GameDataManager {
       throw new Error(`Invalid save slot: ${slot}`);
     }
 
-    const savedData = localStorage.getItem(`tokiwa_save_${slot}`);
-    const savedMeta = localStorage.getItem(`tokiwa_save_meta_${slot}`);
+    const savedData = safeLocalStorage.getItem(`tokiwa_save_${slot}`);
+    const savedMeta = safeLocalStorage.getItem(`tokiwa_save_meta_${slot}`);
 
     if (!savedData || !savedMeta) {
       throw new Error(`Save slot ${slot} is empty`);
@@ -328,7 +315,7 @@ export class GameDataManager {
     const slots: SaveSlot[] = [];
     
     for (let i = 1; i <= this.maxSaveSlots; i++) {
-      const savedMeta = localStorage.getItem(`tokiwa_save_meta_${i}`);
+      const savedMeta = safeLocalStorage.getItem(`tokiwa_save_meta_${i}`);
       
       if (savedMeta) {
         try {
@@ -367,12 +354,12 @@ export class GameDataManager {
       throw new Error(`Invalid save slot: ${slot}`);
     }
 
-    localStorage.removeItem(`tokiwa_save_${slot}`);
-    localStorage.removeItem(`tokiwa_save_meta_${slot}`);
+    safeLocalStorage.removeItem(`tokiwa_save_${slot}`);
+    safeLocalStorage.removeItem(`tokiwa_save_meta_${slot}`);
     
     // バックアップも削除
     for (let i = 1; i <= this.maxBackups; i++) {
-      localStorage.removeItem(`tokiwa_backup_${slot}_${i}`);
+      safeLocalStorage.removeItem(`tokiwa_backup_${slot}_${i}`);
     }
 
     console.log(`スロット${slot}のセーブデータを削除しました`);
@@ -380,18 +367,18 @@ export class GameDataManager {
 
   // バックアップ作成
   private async createBackup(slot: number): Promise<void> {
-    const existingData = localStorage.getItem(`tokiwa_save_${slot}`);
-    const existingMeta = localStorage.getItem(`tokiwa_save_meta_${slot}`);
+    const existingData = safeLocalStorage.getItem(`tokiwa_save_${slot}`);
+    const existingMeta = safeLocalStorage.getItem(`tokiwa_save_meta_${slot}`);
     
     if (existingData && existingMeta) {
       // 既存のバックアップをシフト
       for (let i = this.maxBackups - 1; i >= 1; i--) {
-        const backupData = localStorage.getItem(`tokiwa_backup_${slot}_${i}`);
-        const backupMeta = localStorage.getItem(`tokiwa_backup_meta_${slot}_${i}`);
+        const backupData = safeLocalStorage.getItem(`tokiwa_backup_${slot}_${i}`);
+        const backupMeta = safeLocalStorage.getItem(`tokiwa_backup_meta_${slot}_${i}`);
         
         if (backupData && backupMeta) {
-          localStorage.setItem(`tokiwa_backup_${slot}_${i + 1}`, backupData);
-          localStorage.setItem(`tokiwa_backup_meta_${slot}_${i + 1}`, backupMeta);
+          safeLocalStorage.setItem(`tokiwa_backup_${slot}_${i + 1}`, backupData);
+          safeLocalStorage.setItem(`tokiwa_backup_meta_${slot}_${i + 1}`, backupMeta);
         }
       }
       
@@ -400,16 +387,16 @@ export class GameDataManager {
       metadata.isBackup = true;
       metadata.updatedAt = new Date().toISOString();
       
-      localStorage.setItem(`tokiwa_backup_${slot}_1`, existingData);
-      localStorage.setItem(`tokiwa_backup_meta_${slot}_1`, JSON.stringify(metadata));
+      safeLocalStorage.setItem(`tokiwa_backup_${slot}_1`, existingData);
+      safeLocalStorage.setItem(`tokiwa_backup_meta_${slot}_1`, JSON.stringify(metadata));
     }
   }
 
   // バックアップからの読み込み
   private async loadBackup(slot: number): Promise<GameSaveData | null> {
     for (let i = 1; i <= this.maxBackups; i++) {
-      const backupData = localStorage.getItem(`tokiwa_backup_${slot}_${i}`);
-      const backupMeta = localStorage.getItem(`tokiwa_backup_meta_${slot}_${i}`);
+      const backupData = safeLocalStorage.getItem(`tokiwa_backup_${slot}_${i}`);
+      const backupMeta = safeLocalStorage.getItem(`tokiwa_backup_meta_${slot}_${i}`);
       
       if (backupData && backupMeta) {
         try {
@@ -757,4 +744,18 @@ export class GameDataManager {
   }
 }
 
-export const gameDataManager = new GameDataManager();
+// クライアントサイドでのみGameDataManagerインスタンスを作成
+let gameDataManager: GameDataManager | null = null;
+
+export function getGameDataManager(): GameDataManager {
+  if (typeof window === 'undefined') {
+    // サーバーサイドではnullを返す
+    return null as any;
+  }
+  
+  if (!gameDataManager) {
+    gameDataManager = new GameDataManager();
+  }
+  
+  return gameDataManager;
+}

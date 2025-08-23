@@ -1,9 +1,10 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { User } from '@/types/auth'
 import { supabase, isSupabaseAvailable } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
+import { safeLocalStorage } from '@/lib/storage'
 
 interface AuthContextType {
   user: User | null
@@ -26,71 +27,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
 
+  // 初期化処理
   useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        setIsLoading(true)
+        
+        // Supabaseの接続確認
+        if (supabase) {
+          console.log('🔐 AuthProvider: Supabase認証を使用')
+          setAuthMethod('supabase')
+          
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            const appUser: User = {
+              id: session.user.id,
+              guestName: session.user.user_metadata?.trainer_name || 'Unknown Trainer',
+              schoolName: session.user.user_metadata?.school_name || 'Unknown School',
+              currentMoney: 5000,
+              totalReputation: 0,
+              uiTheme: 'gameboy_green',
+              createdAt: session.user.created_at,
+              updatedAt: new Date().toISOString()
+            }
+            setUser(appUser)
+            setIsLoading(false)
+            return
+          }
+        } else {
+          console.log('🔐 AuthProvider: ローカル認証を使用')
+          setAuthMethod('local')
+        }
+
+        // クライアントサイドでのみlocalStorageにアクセス
+        if (typeof window !== 'undefined') {
+          // ローカルストレージから復元
+          const savedUser = safeLocalStorage.getItem('tokiwa_user')
+          if (savedUser) {
+            try {
+              const parsedUser = JSON.parse(savedUser)
+              if (parsedUser && parsedUser.id && parsedUser.guestName) {
+                console.log('🔐 AuthProvider: ローカルユーザー復元')
+                setUser(parsedUser)
+              } else {
+                safeLocalStorage.removeItem('tokiwa_user')
+              }
+            } catch (error) {
+              console.error('🔐 AuthProvider: ユーザー情報のパースエラー:', error)
+              safeLocalStorage.removeItem('tokiwa_user')
+            }
+          }
+        }
+      } catch (error) {
+        console.error('🔐 AuthProvider: 初期化エラー:', error)
+        setError('認証システムの初期化に失敗しました')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
     initializeAuth()
   }, [])
-
-  const initializeAuth = async () => {
-    console.log('🔐 AuthProvider: 初期化開始')
-    setError(null)
-    
-    try {
-      // Supabaseの利用可能性をチェック
-      if (isSupabaseAvailable() && supabase) {
-        console.log('🔐 AuthProvider: Supabaseを使用')
-        setAuthMethod('supabase')
-        
-        // Supabaseセッションを確認
-        const { data: { session }, error } = await supabase.auth.getSession()
-        
-        if (error) {
-          console.error('🔐 AuthProvider: Supabaseセッション取得エラー:', error)
-          setAuthMethod('local')
-        } else if (session?.user) {
-          console.log('🔐 AuthProvider: Supabaseセッション存在')
-          // Supabaseユーザーからアプリケーションユーザーを作成
-          const appUser: User = {
-            id: session.user.id,
-            guestName: session.user.user_metadata?.trainer_name || 'Unknown Trainer',
-            schoolName: session.user.user_metadata?.school_name || 'Unknown School',
-            currentMoney: 5000, // 初期値
-            totalReputation: 0,
-            uiTheme: 'gameboy_green',
-            createdAt: session.user.created_at,
-            updatedAt: new Date().toISOString()
-          }
-          setUser(appUser)
-          setIsLoading(false)
-          return
-        }
-      } else {
-        console.log('🔐 AuthProvider: ローカル認証を使用')
-        setAuthMethod('local')
-      }
-
-      // ローカルストレージから復元
-      const savedUser = localStorage.getItem('tokiwa_user')
-      if (savedUser) {
-        try {
-          const parsedUser = JSON.parse(savedUser)
-          if (parsedUser && parsedUser.id && parsedUser.guestName) {
-            console.log('🔐 AuthProvider: ローカルユーザー復元')
-            setUser(parsedUser)
-          } else {
-            localStorage.removeItem('tokiwa_user')
-          }
-        } catch (error) {
-          console.error('🔐 AuthProvider: ユーザー情報のパースエラー:', error)
-          localStorage.removeItem('tokiwa_user')
-        }
-      }
-    } catch (error) {
-      console.error('🔐 AuthProvider: 初期化エラー:', error)
-      setError('認証システムの初期化に失敗しました')
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Supabaseセッション変更の監視
   useEffect(() => {
@@ -113,7 +110,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(appUser)
           } else if (event === 'SIGNED_OUT') {
             setUser(null)
-            localStorage.removeItem('tokiwa_user')
+            safeLocalStorage.removeItem('tokiwa_user')
           }
         }
       )
@@ -193,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut()
       }
       setUser(null)
-      localStorage.removeItem('tokiwa_user')
+      safeLocalStorage.removeItem('tokiwa_user')
       router.push('/')
     } catch (error: any) {
       console.error('🔐 サインアウトエラー:', error)
@@ -214,7 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     setUser(guestUser)
-    localStorage.setItem('tokiwa_user', JSON.stringify(guestUser))
+    safeLocalStorage.setItem('tokiwa_user', JSON.stringify(guestUser))
     router.push('/dashboard')
   }
 

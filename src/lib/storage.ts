@@ -238,6 +238,111 @@ class StorageManager {
 // シングルトンインスタンス
 export const storage = new StorageManager()
 
+// サーバーサイドとクライアントサイドの両方で安全に動作するlocalStorageユーティリティ
+export const safeLocalStorage = {
+  getItem: (key: string): string | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    try {
+      return localStorage.getItem(key);
+    } catch (error) {
+      console.warn(`localStorage.getItem(${key}) failed:`, error);
+      return null;
+    }
+  },
+
+  setItem: (key: string, value: string): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      localStorage.setItem(key, value);
+    } catch (error) {
+      console.warn(`localStorage.setItem(${key}) failed:`, error);
+    }
+  },
+
+  removeItem: (key: string): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn(`localStorage.removeItem(${key}) failed:`, error);
+    }
+  },
+
+  clear: (): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      localStorage.clear();
+    } catch (error) {
+      console.warn('localStorage.clear() failed:', error);
+    }
+  },
+
+  key: (index: number): string | null => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+    try {
+      return localStorage.key(index);
+    } catch (error) {
+      console.warn(`localStorage.key(${index}) failed:`, error);
+      return null;
+    }
+  },
+
+  get length(): number {
+    if (typeof window === 'undefined') {
+      return 0;
+    }
+    try {
+      return localStorage.length;
+    } catch (error) {
+      console.warn('localStorage.length failed:', error);
+      return 0;
+    }
+  },
+
+  // 特定のプレフィックスを持つキーのみを取得
+  getKeysWithPrefix: (prefix: string): string[] => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+    try {
+      const keys: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          keys.push(key);
+        }
+      }
+      return keys;
+    } catch (error) {
+      console.warn(`getKeysWithPrefix(${prefix}) failed:`, error);
+      return [];
+    }
+  },
+
+  // 特定のプレフィックスを持つキーのみを削除
+  removeKeysWithPrefix: (prefix: string): void => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      const keys = safeLocalStorage.getKeysWithPrefix(prefix);
+      keys.forEach(key => localStorage.removeItem(key));
+    } catch (error) {
+      console.warn(`removeKeysWithPrefix(${prefix}) failed:`, error);
+    }
+  }
+};
+
 // React Hook
 import { useEffect, useState } from 'react'
 

@@ -12,9 +12,48 @@ export function AuthWelcomeScreen() {
   const [trainerName, setTrainerName] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
+  const [isClient, setIsClient] = useState(false)
   
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuth()
+  // クライアントサイドでのみuseAuthを使用
+  const auth = useAuth()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth || {}
   const isDevelopment = process.env.NODE_ENV === 'development'
+
+  // クライアントサイドでのみ実行
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // サーバーサイドでのプリレンダリング時は何も表示しない
+  if (!isClient) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          読み込み中...
+        </div>
+        <div className="animate-pulse">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // authが利用できない場合はエラー表示
+  if (!auth) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid text-red-600">
+          認証システムの初期化に失敗しました
+        </div>
+      </div>
+    )
+  }
 
   const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
     setNotification({ type, message })

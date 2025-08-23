@@ -20,6 +20,25 @@ const nextConfig = {
   env: {
     CUSTOM_KEY: 'retro-pokemon-game',
   },
+  // SSRとプリレンダリングの設定
+  experimental: {
+    // サーバーサイドでのプリレンダリングを制御
+    serverComponentsExternalPackages: [],
+  },
+  // 特定のページでSSRを無効化
+  async headers() {
+    return [
+      {
+        source: '/',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      },
+    ]
+  },
 }
 
 module.exports = nextConfig

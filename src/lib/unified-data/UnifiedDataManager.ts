@@ -19,6 +19,7 @@ import type {
   DataAccessLog
 } from './types'
 import type { GameData } from '../game-state/types'
+import { safeLocalStorage } from '../storage';
 
 export class UnifiedDataManager {
   private static instance: UnifiedDataManager
@@ -79,7 +80,7 @@ export class UnifiedDataManager {
       }
       
       // ローカル保存
-      localStorage.setItem('tokiwa-unified-save', serializedData)
+      safeLocalStorage.setItem('tokiwa-unified-save', serializedData)
       
       // パフォーマンス記録
       const duration = performance.now() - startTime
@@ -113,7 +114,7 @@ export class UnifiedDataManager {
     try {
       this.logAccess('read', 'unified_save', startTime)
       
-      const stored = localStorage.getItem('tokiwa-unified-save')
+      const stored = safeLocalStorage.getItem('tokiwa-unified-save')
       if (!stored) {
         console.log('📂 統合セーブデータが見つかりません')
         return null
@@ -334,7 +335,7 @@ export class UnifiedDataManager {
         compressed: this.config.backup.compressBackups
       }
       
-      localStorage.setItem(`tokiwa-backup-${backupId}`, JSON.stringify(backup))
+      safeLocalStorage.setItem(`tokiwa-backup-${backupId}`, JSON.stringify(backup))
       
       // 古いバックアップの清理
       await this.cleanupBackups()
@@ -358,7 +359,7 @@ export class UnifiedDataManager {
    */
   async restoreBackup(backupId: string): Promise<boolean> {
     try {
-      const stored = localStorage.getItem(`tokiwa-backup-${backupId}`)
+      const stored = safeLocalStorage.getItem(`tokiwa-backup-${backupId}`)
       if (!stored) {
         console.error('❌ バックアップが見つかりません:', backupId)
         return false
@@ -372,7 +373,7 @@ export class UnifiedDataManager {
       
       // データ復元
       const serializedData = JSON.stringify(backup.data)
-      localStorage.setItem('tokiwa-unified-save', serializedData)
+      safeLocalStorage.setItem('tokiwa-unified-save', serializedData)
       
       console.log('📦 バックアップから復元完了:', {
         backupId,
@@ -393,11 +394,11 @@ export class UnifiedDataManager {
   async listBackups(): Promise<BackupData[]> {
     const backups: BackupData[] = []
     
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (key?.startsWith('tokiwa-backup-')) {
+    for (let i = 0; i < safeLocalStorage.getKeysWithPrefix('tokiwa-backup-').length; i++) {
+      const key = safeLocalStorage.getKeysWithPrefix('tokiwa-backup-')[i]
+      if (key) {
         try {
-          const stored = localStorage.getItem(key)
+          const stored = safeLocalStorage.getItem(key)
           if (stored) {
             const backup = JSON.parse(stored) as BackupData
             backups.push(backup)
@@ -427,7 +428,7 @@ export class UnifiedDataManager {
     
     for (const backup of toDelete) {
       try {
-        localStorage.removeItem(`tokiwa-backup-${backup.id}`)
+        safeLocalStorage.removeItem(`tokiwa-backup-${backup.id}`)
         deletedCount++
       } catch (error) {
         console.warn('⚠️ バックアップ削除エラー:', backup.id)
