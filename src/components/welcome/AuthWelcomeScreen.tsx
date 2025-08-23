@@ -5,6 +5,10 @@ import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuthProvider } from '../providers/AuthProvider'
 
+// SSRを無効化
+export const dynamic = 'force-dynamic'
+export const ssr = false
+
 export function AuthWelcomeScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signup')
   const [email, setEmail] = useState('')
