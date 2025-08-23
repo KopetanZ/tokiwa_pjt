@@ -55,18 +55,18 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <DataSystemProvider config={dataSystemConfig}>
-          <GameProvider>
-            <AuthProvider>
+        <AuthProvider>
+          <DataSystemProvider config={dataSystemConfig}>
+            <GameProvider>
               <MusicProvider>
                 <ToastProvider>
                   <DataBridge />
                   {children}
                 </ToastProvider>
               </MusicProvider>
-            </AuthProvider>
-          </GameProvider>
-        </DataSystemProvider>
+            </GameProvider>
+          </DataSystemProvider>
+        </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )
