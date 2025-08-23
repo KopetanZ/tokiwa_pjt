@@ -13,41 +13,22 @@ export function AuthWelcomeScreen() {
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   const [isClient, setIsClient] = useState(false)
-  const [authError, setAuthError] = useState(false)
   
   // クライアントサイドでのみuseAuthProviderを使用
-  let auth = null
-  try {
-    auth = useAuthProvider()
-  } catch (error) {
-    console.log('🔐 AuthWelcomeScreen: AuthProviderが利用できません')
-    setAuthError(true)
-  }
-  
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth || {}
+  const auth = useAuthProvider()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth
   const isDevelopment = process.env.NODE_ENV === 'development'
 
-  // クライアントサイドでのみ実行
   useEffect(() => {
     setIsClient(true)
   }, [])
 
-  // AuthProviderが利用できない場合のフォールバック
-  if (authError) {
-    return (
-      <div className="text-center space-y-6">
-        <div className="font-pixel-xl text-retro-gb-dark">
-          トキワシティ訓練所
-        </div>
-        <div className="font-pixel text-retro-gb-mid">
-          認証システムの初期化中...
-        </div>
-        <div className="animate-pulse">
-          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
-        </div>
-      </div>
-    )
-  }
+  // エラー表示の監視
+  useEffect(() => {
+    if (error) {
+      showNotification('error', error)
+    }
+  }, [error])
 
   // クライアントサイドでのみレンダリング
   if (!isClient) {
@@ -58,30 +39,6 @@ export function AuthWelcomeScreen() {
         </div>
         <div className="font-pixel text-retro-gb-mid">
           読み込み中...
-        </div>
-        <div className="animate-pulse">
-          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
-        </div>
-      </div>
-    )
-  }
-
-  // エラー表示の監視
-  useEffect(() => {
-    if (error) {
-      showNotification('error', error)
-    }
-  }, [error])
-
-  // authが利用できない場合はエラー表示
-  if (!auth) {
-    return (
-      <div className="text-center space-y-6">
-        <div className="font-pixel-xl text-retro-gb-dark">
-          トキワシティ訓練所
-        </div>
-        <div className="font-pixel text-retro-gb-mid">
-          認証システムの初期化中...
         </div>
         <div className="animate-pulse">
           <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
