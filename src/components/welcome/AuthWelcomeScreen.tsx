@@ -13,9 +13,17 @@ export function AuthWelcomeScreen() {
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   const [isClient, setIsClient] = useState(false)
+  const [authError, setAuthError] = useState(false)
   
   // クライアントサイドでのみuseAuthProviderを使用
-  const auth = useAuthProvider()
+  let auth = null
+  try {
+    auth = useAuthProvider()
+  } catch (error) {
+    console.log('🔐 AuthWelcomeScreen: AuthProviderが利用できません')
+    setAuthError(true)
+  }
+  
   const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth || {}
   const isDevelopment = process.env.NODE_ENV === 'development'
 
@@ -24,14 +32,24 @@ export function AuthWelcomeScreen() {
     setIsClient(true)
   }, [])
 
-  // エラー表示の監視
-  useEffect(() => {
-    if (error) {
-      showNotification('error', error)
-    }
-  }, [error])
+  // AuthProviderが利用できない場合のフォールバック
+  if (authError) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          認証システムの初期化中...
+        </div>
+        <div className="animate-pulse">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
 
-  // サーバーサイドでのプリレンダリング時は何も表示しない
+  // クライアントサイドでのみレンダリング
   if (!isClient) {
     return (
       <div className="text-center space-y-6">
@@ -48,6 +66,13 @@ export function AuthWelcomeScreen() {
     )
   }
 
+  // エラー表示の監視
+  useEffect(() => {
+    if (error) {
+      showNotification('error', error)
+    }
+  }, [error])
+
   // authが利用できない場合はエラー表示
   if (!auth) {
     return (
@@ -55,8 +80,28 @@ export function AuthWelcomeScreen() {
         <div className="font-pixel-xl text-retro-gb-dark">
           トキワシティ訓練所
         </div>
-        <div className="font-pixel text-retro-gb-mid text-red-600">
-          認証システムの初期化に失敗しました
+        <div className="font-pixel text-retro-gb-mid">
+          認証システムの初期化中...
+        </div>
+        <div className="animate-pulse">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // 認証済みの場合はダッシュボードにリダイレクト
+  if (isAuthenticated && user) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          ダッシュボードに移動中...
+        </div>
+        <div className="animate-pulse">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
         </div>
       </div>
     )
@@ -84,9 +129,13 @@ export function AuthWelcomeScreen() {
     }
 
     try {
-      await signUp(email, password, trainerName, schoolName)
-      if (!error) {
-        showNotification('success', `${schoolName}へようこそ、${trainerName}館長！`)
+      if (auth?.signUp) {
+        await auth.signUp(email, password, trainerName, schoolName)
+        if (!error) {
+          showNotification('success', `${schoolName}へようこそ、${trainerName}館長！`)
+        }
+      } else {
+        showNotification('error', '認証システムが利用できません')
       }
     } catch (err) {
       // エラーはAuthProviderで処理される
@@ -100,9 +149,13 @@ export function AuthWelcomeScreen() {
     }
 
     try {
-      await signIn(email, password)
-      if (!error) {
-        showNotification('success', 'おかえりなさい！')
+      if (auth?.signIn) {
+        await auth.signIn(email, password)
+        if (!error) {
+          showNotification('success', 'おかえりなさい！')
+        }
+      } else {
+        showNotification('error', '認証システムが利用できません')
       }
     } catch (err) {
       // エラーはAuthProviderで処理される
@@ -111,27 +164,15 @@ export function AuthWelcomeScreen() {
 
   const handleQuickStart = async () => {
     try {
-      await createGuestSession('開発者', 'テスト学校')
-      showNotification('success', '🎮 開発モードでゲームを開始しました！')
+      if (auth?.createGuestSession) {
+        await auth.createGuestSession('開発者', 'テスト学校')
+        showNotification('success', '🎮 開発モードでゲームを開始しました！')
+      } else {
+        showNotification('error', '認証システムが利用できません')
+      }
     } catch (err) {
       showNotification('error', '開発モードの開始に失敗しました')
     }
-  }
-
-  if (isAuthenticated) {
-    return (
-      <div className="text-center space-y-6">
-        <div className="font-pixel-xl text-retro-gb-dark">
-          トキワシティ訓練所
-        </div>
-        <div className="font-pixel text-retro-gb-mid">
-          ダッシュボードをロード中...
-        </div>
-        <div className="animate-pulse">
-          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
-        </div>
-      </div>
-    )
   }
 
   return (

@@ -28,8 +28,6 @@ const AuthWelcomeScreen = dynamicImport(
   }
 )
 
-
-
 export default function HomePage() {
   const [isClient, setIsClient] = useState(false)
 
