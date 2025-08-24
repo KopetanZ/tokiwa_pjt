@@ -67,8 +67,8 @@ function AuthWelcomeScreenClient() {
     }
 
     try {
-      if (auth?.signUp) {
-        await auth.signUp(email, password, trainerName, schoolName)
+      if (signUp) {
+        await signUp(email, password, trainerName, schoolName)
         if (!error) {
           showNotification('success', `${schoolName}へようこそ、${trainerName}館長！`)
         }
@@ -87,8 +87,8 @@ function AuthWelcomeScreenClient() {
     }
 
     try {
-      if (auth?.signIn) {
-        await auth.signIn(email, password)
+      if (signIn) {
+        await signIn(email, password)
         if (!error) {
           showNotification('success', 'おかえりなさい！')
         }
@@ -102,8 +102,8 @@ function AuthWelcomeScreenClient() {
 
   const handleQuickStart = async () => {
     try {
-      if (auth?.createGuestSession) {
-        await auth.createGuestSession('開発者', 'テスト学校')
+      if (createGuestSession) {
+        await createGuestSession('開発者', 'テスト学校')
         showNotification('success', '🎮 開発モードでゲームを開始しました！')
       } else {
         showNotification('error', '認証システムが利用できません')
