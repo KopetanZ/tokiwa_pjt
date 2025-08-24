@@ -9,23 +9,17 @@ import { useAuthProvider } from '../providers/AuthProvider'
 export const dynamic = 'force-dynamic'
 export const ssr = false
 
-export function AuthWelcomeScreen() {
+function AuthWelcomeScreenClient() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signup')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [trainerName, setTrainerName] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
-  const [isClient, setIsClient] = useState(false)
   
-  // クライアントサイドでのみuseAuthProviderを使用
-  const auth = useAuthProvider()
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = auth
+  // 安全にuseAuthProviderを使用
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuthProvider()
   const isDevelopment = process.env.NODE_ENV === 'development'
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   // エラー表示の監視
   useEffect(() => {
@@ -33,23 +27,6 @@ export function AuthWelcomeScreen() {
       showNotification('error', error)
     }
   }, [error])
-
-  // クライアントサイドでのみレンダリング
-  if (!isClient) {
-    return (
-      <div className="text-center space-y-6">
-        <div className="font-pixel-xl text-retro-gb-dark">
-          トキワシティ訓練所
-        </div>
-        <div className="font-pixel text-retro-gb-mid">
-          読み込み中...
-        </div>
-        <div className="animate-pulse">
-          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
-        </div>
-      </div>
-    )
-  }
 
   // 認証済みの場合はダッシュボードにリダイレクト
   if (isAuthenticated && user) {
@@ -297,4 +274,31 @@ export function AuthWelcomeScreen() {
       </div>
     </div>
   )
+}
+
+export function AuthWelcomeScreen() {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // クライアントサイドでのみレンダリング
+  if (!isClient) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          読み込み中...
+        </div>
+        <div className="animate-pulse">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
+
+  return <AuthWelcomeScreenClient />
 }

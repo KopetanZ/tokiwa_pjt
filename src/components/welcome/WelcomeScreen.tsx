@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuthProvider } from '@/components/providers/AuthProvider'
 // import { useToast } from '@/components/providers/ToastProvider'
 
-export function WelcomeScreen() {
+function WelcomeScreenClient() {
   const [guestName, setGuestName] = useState('')
   const [schoolName, setSchoolName] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -337,4 +337,31 @@ export function WelcomeScreen() {
       )}
     </div>
   )
+}
+
+export function WelcomeScreen() {
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  if (!isClient) {
+    return (
+      <div className="text-center space-y-6">
+        <div className="font-pixel-xl text-retro-gb-dark">
+          トキワシティ訓練所
+        </div>
+        <div className="font-pixel text-retro-gb-mid">
+          起動中... しばらくお待ちください
+        </div>
+        <div className="animate-pulse space-y-2">
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+          <div className="w-12 h-2 bg-retro-gb-light mx-auto"></div>
+        </div>
+      </div>
+    )
+  }
+
+  return <WelcomeScreenClient />
 }
