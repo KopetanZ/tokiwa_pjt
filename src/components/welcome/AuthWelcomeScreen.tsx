@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuthProvider } from '../providers/AuthProvider'
@@ -19,8 +19,9 @@ function AuthWelcomeScreenClient() {
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
-  // AuthProviderから認証情報を取得
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useAuthProvider()
+  // AuthProviderから認証情報を取得し、メモ化で再レンダーを抑制
+  const authData = useAuthProvider()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useMemo(() => authData, [authData])
   const isDevelopment = process.env.NODE_ENV === 'development'
 
   // エラー表示の監視（ただし、fallback状態のエラーは除外）
@@ -211,15 +212,17 @@ function AuthWelcomeScreenClient() {
             type="email"
             placeholder="trainer@tokiwa.school"
             value={email}
-            onChange={(e) => {
+            onChange={useCallback((e) => {
               try {
-                const sanitizedValue = sanitizeEmail(e.target.value || '')
-                setEmail(sanitizedValue)
+                const rawValue = e.target?.value
+                if (typeof rawValue === 'string') {
+                  const sanitizedValue = sanitizeEmail(rawValue)
+                  setEmail(sanitizedValue)
+                }
               } catch (error) {
                 console.warn('⚠️ Email input error:', error)
-                // エラーの場合は現在の値を保持
               }
-            }}
+            }, [])}
             disabled={isLoading}
           />
         </div>
@@ -232,16 +235,16 @@ function AuthWelcomeScreenClient() {
             type="password"
             placeholder="6文字以上"
             value={password}
-            onChange={(e) => {
+            onChange={useCallback((e) => {
               try {
-                // パスワードは基本的なnullチェックのみ
-                const value = e.target.value || ''
-                setPassword(value)
+                const rawValue = e.target?.value
+                if (typeof rawValue === 'string') {
+                  setPassword(rawValue)
+                }
               } catch (error) {
                 console.warn('⚠️ Password input error:', error)
-                // エラーの場合は現在の値を保持
               }
-            }}
+            }, [])}
             disabled={isLoading}
           />
         </div>
@@ -256,15 +259,18 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="サトシ"
                 value={trainerName}
-                onChange={(e) => {
+                onChange={useCallback((e) => {
                   try {
-                    const sanitizedValue = sanitizeTrainerName(e.target.value || '')
-                    setTrainerName(sanitizedValue)
+                    const rawValue = e.target?.value
+                    if (typeof rawValue === 'string') {
+                      const sanitizedValue = sanitizeTrainerName(rawValue)
+                      setTrainerName(sanitizedValue)
+                    }
                   } catch (error) {
                     console.warn('⚠️ Trainer name input error:', error)
                     showNotification('warning', '入力中にエラーが発生しました')
                   }
-                }}
+                }, [])}
                 maxLength={20}
                 disabled={isLoading}
               />
@@ -278,15 +284,18 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="マサラタウン育成学校"
                 value={schoolName}
-                onChange={(e) => {
+                onChange={useCallback((e) => {
                   try {
-                    const sanitizedValue = sanitizeSchoolName(e.target.value || '')
-                    setSchoolName(sanitizedValue)
+                    const rawValue = e.target?.value
+                    if (typeof rawValue === 'string') {
+                      const sanitizedValue = sanitizeSchoolName(rawValue)
+                      setSchoolName(sanitizedValue)
+                    }
                   } catch (error) {
                     console.warn('⚠️ School name input error:', error)
                     showNotification('warning', '入力中にエラーが発生しました')
                   }
-                }}
+                }, [])}
                 maxLength={50}
                 disabled={isLoading}
               />

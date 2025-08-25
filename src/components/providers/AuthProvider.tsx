@@ -379,106 +379,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Global flag to prevent infinite recursion
-let isInErrorContext = false
+// Simple background context detection for development
 
 export function useAuthProvider() {
   // Always call useContext first (React Hooks rules)
   const context = useContext(AuthContext)
   
-  // Prevent infinite recursion
-  if (isInErrorContext) {
-    console.warn('🚨 Infinite recursion detected in useAuthProvider, returning safe fallback')
-    return {
-      user: null,
-      isLoading: false,
-      isAuthenticated: false,
-      signUp: async () => { console.warn('signUp called in error context') },
-      signIn: async () => { console.warn('signIn called in error context') },
-      signOut: async () => { console.warn('signOut called in error context') },
-      forceSignOut: async () => { console.warn('forceSignOut called in error context') },
-      createGuestSession: async () => { console.warn('createGuestSession called in error context') },
-      authMethod: 'local' as const,
-      error: null
-    }
-  }
+  // シンプルなコンテキストチェック - 正当な使用の場合はコンテキストが存在するはず
   if (context === undefined) {
-    // Set flag to prevent infinite recursion
-    isInErrorContext = true
-    
-    // Enhanced background context detection
-    if (typeof window !== 'undefined') {
+    // 開発環境でのみバックグラウンド処理をチェック
+    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       const stackTrace = new Error().stack || ''
       
-      // More comprehensive MessagePort detection
-      const isMessagePortContext = (
+      // 真にバックグラウンド処理の場合のみモックを返す（入力処理は除外）
+      const isTrueBackgroundContext = (
         stackTrace.includes('MessagePort') || 
-        stackTrace.includes('postMessage') ||
         stackTrace.includes('webpackHotUpdate') ||
         stackTrace.includes('webpack_require') ||
-        stackTrace.includes('__webpack') ||
         stackTrace.includes('hot-dev-client') ||
         stackTrace.includes('react-refresh') ||
         stackTrace.includes('fast-refresh') ||
-        stackTrace.includes('eventsource') ||
-        stackTrace.includes('websocket')
+        typeof (globalThis as any).importScripts === 'function' ||
+        window.name === 'nodejs'
       )
       
-      const isWorkerContext = typeof (globalThis as any).importScripts === 'function'
-      const isNodeContext = window.name === 'nodejs'
-      const isHMRContext = !!(window as any).__NEXT_DATA__ && process.env.NODE_ENV === 'development'
-      const isDevToolsContext = !!(window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__
-      
-      // Check for React internal calls
-      const isReactInternal = (
-        stackTrace.includes('react-dom') ||
-        stackTrace.includes('scheduler') ||
-        stackTrace.includes('reconciler') ||
-        stackTrace.includes('fiber')
-      )
-      
-      if (isWorkerContext || isNodeContext || isHMRContext || isDevToolsContext || isMessagePortContext || isReactInternal) {
-        console.warn('⚠️ useAuthProvider called in background/dev context, returning mock', {
-          isWorkerContext,
-          isNodeContext, 
-          isHMRContext,
-          isDevToolsContext,
-          isMessagePortContext,
-          isReactInternal
-        })
-        
-        // Reset flag and return mock
-        setTimeout(() => { isInErrorContext = false }, 100)
-        
+      if (isTrueBackgroundContext) {
+        // サイレントにモックを返す（ログを最小限に）
         return {
           user: null,
           isLoading: false,
           isAuthenticated: false,
-          signUp: async () => { console.warn('signUp called in background context') },
-          signIn: async () => { console.warn('signIn called in background context') },
-          signOut: async () => { console.warn('signOut called in background context') },
-          forceSignOut: async () => { console.warn('forceSignOut called in background context') },
-          createGuestSession: async () => { console.warn('createGuestSession called in background context') },
+          signUp: async () => {},
+          signIn: async () => {},
+          signOut: async () => {},
+          forceSignOut: async () => {},
+          createGuestSession: async () => {},
           authMethod: 'local' as const,
           error: null
         }
       }
     }
     
-    // Development error logging
-    if (process.env.NODE_ENV === 'development') {
-      const errorDetails = {
-        stack: new Error().stack,
-        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side',
-        timestamp: new Date().toISOString(),
-        userAgent: typeof window !== 'undefined' ? window.navigator?.userAgent : 'unknown'
-      }
-      
-      console.error('❌ useAuthProvider called outside AuthProvider context', errorDetails)
-    }
-    
-    // Reset flag and throw error
-    setTimeout(() => { isInErrorContext = false }, 100)
+    // 正当なコンポーネントでコンテキストが見つからない場合のみエラー
     throw new Error('useAuthProvider must be used within an AuthProvider')
   }
   
