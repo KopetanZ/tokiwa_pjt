@@ -24,12 +24,67 @@ function AuthWelcomeScreenClient() {
   const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useMemo(() => authData, [authData])
   const isDevelopment = process.env.NODE_ENV === 'development'
 
+  // すべてのuseCallbackをトップレベルで定義
+  const showNotification = useCallback((type: 'success' | 'error' | 'warning' | 'info', message: string) => {
+    setNotification({ type, message })
+    setTimeout(() => setNotification(null), 5000)
+  }, [])
+
+  const handleEmailChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const rawValue = e.target?.value
+      if (typeof rawValue === 'string') {
+        const sanitizedValue = sanitizeEmail(rawValue)
+        setEmail(sanitizedValue)
+      }
+    } catch (error) {
+      console.warn('⚠️ Email input error:', error)
+    }
+  }, [])
+
+  const handlePasswordChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const rawValue = e.target?.value
+      if (typeof rawValue === 'string') {
+        setPassword(rawValue)
+      }
+    } catch (error) {
+      console.warn('⚠️ Password input error:', error)
+    }
+  }, [])
+
+  const handleTrainerNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const rawValue = e.target?.value
+      if (typeof rawValue === 'string') {
+        const sanitizedValue = sanitizeTrainerName(rawValue)
+        setTrainerName(sanitizedValue)
+      }
+    } catch (error) {
+      console.warn('⚠️ Trainer name input error:', error)
+      showNotification('warning', '入力中にエラーが発生しました')
+    }
+  }, [showNotification])
+
+  const handleSchoolNameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const rawValue = e.target?.value
+      if (typeof rawValue === 'string') {
+        const sanitizedValue = sanitizeSchoolName(rawValue)
+        setSchoolName(sanitizedValue)
+      }
+    } catch (error) {
+      console.warn('⚠️ School name input error:', error)
+      showNotification('warning', '入力中にエラーが発生しました')
+    }
+  }, [showNotification])
+
   // エラー表示の監視（ただし、fallback状態のエラーは除外）
   useEffect(() => {
     if (error && error !== 'Authentication context unavailable') {
       showNotification('error', error)
     }
-  }, [error])
+  }, [error, showNotification])
 
   // 認証済みの場合はダッシュボードにリダイレクト
   if (isAuthenticated && user) {
@@ -67,11 +122,6 @@ function AuthWelcomeScreenClient() {
         </div>
       </div>
     )
-  }
-
-  const showNotification = (type: 'success' | 'error' | 'warning' | 'info', message: string) => {
-    setNotification({ type, message })
-    setTimeout(() => setNotification(null), 5000)
   }
 
   const handleSignUp = async () => {
@@ -212,17 +262,7 @@ function AuthWelcomeScreenClient() {
             type="email"
             placeholder="trainer@tokiwa.school"
             value={email}
-            onChange={useCallback((e) => {
-              try {
-                const rawValue = e.target?.value
-                if (typeof rawValue === 'string') {
-                  const sanitizedValue = sanitizeEmail(rawValue)
-                  setEmail(sanitizedValue)
-                }
-              } catch (error) {
-                console.warn('⚠️ Email input error:', error)
-              }
-            }, [])}
+            onChange={handleEmailChange}
             disabled={isLoading}
           />
         </div>
@@ -235,16 +275,7 @@ function AuthWelcomeScreenClient() {
             type="password"
             placeholder="6文字以上"
             value={password}
-            onChange={useCallback((e) => {
-              try {
-                const rawValue = e.target?.value
-                if (typeof rawValue === 'string') {
-                  setPassword(rawValue)
-                }
-              } catch (error) {
-                console.warn('⚠️ Password input error:', error)
-              }
-            }, [])}
+            onChange={handlePasswordChange}
             disabled={isLoading}
           />
         </div>
@@ -259,18 +290,7 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="サトシ"
                 value={trainerName}
-                onChange={useCallback((e) => {
-                  try {
-                    const rawValue = e.target?.value
-                    if (typeof rawValue === 'string') {
-                      const sanitizedValue = sanitizeTrainerName(rawValue)
-                      setTrainerName(sanitizedValue)
-                    }
-                  } catch (error) {
-                    console.warn('⚠️ Trainer name input error:', error)
-                    showNotification('warning', '入力中にエラーが発生しました')
-                  }
-                }, [])}
+                onChange={handleTrainerNameChange}
                 maxLength={20}
                 disabled={isLoading}
               />
@@ -284,18 +304,7 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="マサラタウン育成学校"
                 value={schoolName}
-                onChange={useCallback((e) => {
-                  try {
-                    const rawValue = e.target?.value
-                    if (typeof rawValue === 'string') {
-                      const sanitizedValue = sanitizeSchoolName(rawValue)
-                      setSchoolName(sanitizedValue)
-                    }
-                  } catch (error) {
-                    console.warn('⚠️ School name input error:', error)
-                    showNotification('warning', '入力中にエラーが発生しました')
-                  }
-                }, [])}
+                onChange={handleSchoolNameChange}
                 maxLength={50}
                 disabled={isLoading}
               />
