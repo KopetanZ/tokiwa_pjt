@@ -6,36 +6,82 @@ interface ErrorBoundaryState {
   hasError: boolean
   error?: Error
   errorInfo?: React.ErrorInfo
+  errorCount: number
+  lastErrorTime: number
 }
 
 interface ErrorBoundaryProps {
   children: React.ReactNode
   fallback?: React.ReactNode
+  maxErrors?: number
+  resetTimeoutMs?: number
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  private resetTimeoutId: NodeJS.Timeout | null = null
+  private errorCountResetId: NodeJS.Timeout | null = null
+  
   constructor(props: ErrorBoundaryProps) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { 
+      hasError: false, 
+      errorCount: 0, 
+      lastErrorTime: 0 
+    }
   }
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    // エラーが発生した場合の状態更新
-    return { hasError: true, error }
+  static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
+    const now = Date.now()
+    return { 
+      hasError: true, 
+      error,
+      lastErrorTime: now
+    }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    // エラーログ
+    const now = Date.now()
+    const timeSinceLastError = now - this.state.lastErrorTime
+    const newErrorCount = timeSinceLastError < 5000 ? this.state.errorCount + 1 : 1
+    
     console.error('🚨 ErrorBoundary caught an error:', error)
     console.error('📍 Error Info:', errorInfo)
+    console.error('🔢 Error count:', newErrorCount)
     
     this.setState({
       hasError: true,
       error,
-      errorInfo
+      errorInfo,
+      errorCount: newErrorCount,
+      lastErrorTime: now
     })
 
-    // 入力関連のエラーの場合は特別な処理
+    // Clear existing timeouts
+    if (this.resetTimeoutId) {
+      clearTimeout(this.resetTimeoutId)
+    }
+    if (this.errorCountResetId) {
+      clearTimeout(this.errorCountResetId)
+    }
+
+    // AuthProvider無限ループの特別処理
+    if (error.message && error.message.includes('useAuthProvider must be used within an AuthProvider')) {
+      console.warn('⚠️ AuthProvider context error caught, attempting recovery')
+      
+      // すぐにリセットして無限ループを防ぐ
+      this.resetTimeoutId = setTimeout(() => {
+        console.log('🔄 Auto-resetting ErrorBoundary for AuthProvider error')
+        this.setState({ 
+          hasError: false, 
+          error: undefined, 
+          errorInfo: undefined 
+        })
+      }, 100) // 短い遅延でリセット
+      
+      return
+    }
+
+    // 入力関連のエラー処理
     if (error.message && (
       error.message.includes('input') || 
       error.message.includes('value') || 
@@ -44,11 +90,45 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     )) {
       console.warn('⚠️ Input-related error caught by ErrorBoundary:', error.message)
       
-      // 一定時間後にリセット
-      setTimeout(() => {
-        this.setState({ hasError: false, error: undefined, errorInfo: undefined })
-      }, 3000)
+      this.resetTimeoutId = setTimeout(() => {
+        console.log('🔄 Auto-resetting ErrorBoundary for input error')
+        this.setState({ 
+          hasError: false, 
+          error: undefined, 
+          errorInfo: undefined 
+        })
+      }, 2000)
+      
+      return
     }
+
+    // エラー数が多い場合の処理
+    const maxErrors = this.props.maxErrors || 5
+    if (newErrorCount >= maxErrors) {
+      console.error('🚨 Too many errors, forcing page reload')
+      // 無限ループを防ぐためにページをリロード
+      window.location.reload()
+      return
+    }
+
+    // 通常のエラーは少し長めの遅延でリセット
+    const resetTimeout = this.props.resetTimeoutMs || 5000
+    this.resetTimeoutId = setTimeout(() => {
+      console.log('🔄 Auto-resetting ErrorBoundary after timeout')
+      this.setState({ 
+        hasError: false, 
+        error: undefined, 
+        errorInfo: undefined 
+      })
+    }, resetTimeout)
+    
+    // エラー数リセットタイマー
+    this.errorCountResetId = setTimeout(() => {
+      this.setState(prevState => ({
+        ...prevState,
+        errorCount: 0
+      }))
+    }, 30000) // 30秒でエラー数リセット
   }
 
   render() {
@@ -71,7 +151,16 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           </div>
           <div className="space-y-2">
             <button
-              onClick={() => this.setState({ hasError: false, error: undefined, errorInfo: undefined })}
+              onClick={() => {
+                if (this.resetTimeoutId) clearTimeout(this.resetTimeoutId)
+                if (this.errorCountResetId) clearTimeout(this.errorCountResetId)
+                this.setState({ 
+                  hasError: false, 
+                  error: undefined, 
+                  errorInfo: undefined,
+                  errorCount: 0
+                })
+              }}
               className="font-pixel text-xs px-4 py-2 bg-red-200 hover:bg-red-300 border-2 border-red-400 text-red-800 rounded transition-colors"
             >
               🔄 再試行
@@ -83,6 +172,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
               🔄 ページ再読み込み
             </button>
           </div>
+          {this.state.errorCount > 1 && (
+            <div className="text-xs text-orange-600 font-pixel">
+              ⚠️ 連続エラー: {this.state.errorCount}回
+            </div>
+          )}
           {process.env.NODE_ENV === 'development' && this.state.error && (
             <details className="text-left text-xs text-gray-600 mt-4">
               <summary className="cursor-pointer font-pixel">開発者情報</summary>
@@ -101,5 +195,15 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
     }
 
     return this.props.children
+  }
+  
+  componentWillUnmount() {
+    // コンポーネントがアンマウントされる時にタイマーをクリア
+    if (this.resetTimeoutId) {
+      clearTimeout(this.resetTimeoutId)
+    }
+    if (this.errorCountResetId) {
+      clearTimeout(this.errorCountResetId)
+    }
   }
 }

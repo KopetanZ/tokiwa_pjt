@@ -379,52 +379,76 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+// Global flag to prevent infinite recursion
+let isInErrorContext = false
+
 export function useAuthProvider() {
+  // Prevent infinite recursion
+  if (isInErrorContext) {
+    console.warn('🚨 Infinite recursion detected in useAuthProvider, returning safe fallback')
+    return {
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      signUp: async () => { console.warn('signUp called in error context') },
+      signIn: async () => { console.warn('signIn called in error context') },
+      signOut: async () => { console.warn('signOut called in error context') },
+      forceSignOut: async () => { console.warn('forceSignOut called in error context') },
+      createGuestSession: async () => { console.warn('createGuestSession called in error context') },
+      authMethod: 'local' as const,
+      error: null
+    }
+  }
+  
   const context = useContext(AuthContext)
   if (context === undefined) {
-    // In development, provide more detailed error information
-    if (process.env.NODE_ENV === 'development') {
-      const errorDetails = {
-        stack: new Error().stack,
-        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side',
-        timestamp: new Date().toISOString(),
-        userAgent: typeof window !== 'undefined' ? window.navigator?.userAgent : 'unknown'
-      }
-      
-      console.error('❌ useAuthProvider called outside AuthProvider context', errorDetails)
-      
-      // Try to identify the specific component or context
-      const stackLines = new Error().stack?.split('\n') || []
-      const relevantLines = stackLines.filter(line => 
-        line.includes('.tsx') || line.includes('.ts') || line.includes('components/')
-      ).slice(0, 3)
-      
-      console.error('📍 Stack trace (component files only):', relevantLines)
-    }
+    // Set flag to prevent infinite recursion
+    isInErrorContext = true
     
-    // Check if we're in a special context (like HMR, service worker, worker thread, etc.)
+    // Enhanced background context detection
     if (typeof window !== 'undefined') {
+      const stackTrace = new Error().stack || ''
+      
+      // More comprehensive MessagePort detection
+      const isMessagePortContext = (
+        stackTrace.includes('MessagePort') || 
+        stackTrace.includes('postMessage') ||
+        stackTrace.includes('webpackHotUpdate') ||
+        stackTrace.includes('webpack_require') ||
+        stackTrace.includes('__webpack') ||
+        stackTrace.includes('hot-dev-client') ||
+        stackTrace.includes('react-refresh') ||
+        stackTrace.includes('fast-refresh') ||
+        stackTrace.includes('eventsource') ||
+        stackTrace.includes('websocket')
+      )
+      
       const isWorkerContext = typeof (globalThis as any).importScripts === 'function'
       const isNodeContext = window.name === 'nodejs'
       const isHMRContext = !!(window as any).__NEXT_DATA__ && process.env.NODE_ENV === 'development'
       const isDevToolsContext = !!(window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__
       
-      // Check if we're in a MessagePort context by examining the call stack
-      const stackTrace = new Error().stack || ''
-      const isMessagePortContext = stackTrace.includes('MessagePort') || 
-                                   stackTrace.includes('postMessage') ||
-                                   stackTrace.includes('webpackHotUpdate')
+      // Check for React internal calls
+      const isReactInternal = (
+        stackTrace.includes('react-dom') ||
+        stackTrace.includes('scheduler') ||
+        stackTrace.includes('reconciler') ||
+        stackTrace.includes('fiber')
+      )
       
-      if (isWorkerContext || isNodeContext || isHMRContext || isDevToolsContext || isMessagePortContext) {
+      if (isWorkerContext || isNodeContext || isHMRContext || isDevToolsContext || isMessagePortContext || isReactInternal) {
         console.warn('⚠️ useAuthProvider called in background/dev context, returning mock', {
           isWorkerContext,
           isNodeContext, 
           isHMRContext,
           isDevToolsContext,
-          isMessagePortContext
+          isMessagePortContext,
+          isReactInternal
         })
         
-        // Return a minimal mock instead of throwing
+        // Reset flag and return mock
+        setTimeout(() => { isInErrorContext = false }, 100)
+        
         return {
           user: null,
           isLoading: false,
@@ -440,8 +464,23 @@ export function useAuthProvider() {
       }
     }
     
+    // Development error logging
+    if (process.env.NODE_ENV === 'development') {
+      const errorDetails = {
+        stack: new Error().stack,
+        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side',
+        timestamp: new Date().toISOString(),
+        userAgent: typeof window !== 'undefined' ? window.navigator?.userAgent : 'unknown'
+      }
+      
+      console.error('❌ useAuthProvider called outside AuthProvider context', errorDetails)
+    }
+    
+    // Reset flag and throw error
+    setTimeout(() => { isInErrorContext = false }, 100)
     throw new Error('useAuthProvider must be used within an AuthProvider')
   }
+  
   return context
 }
 

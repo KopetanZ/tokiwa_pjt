@@ -43,10 +43,33 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if (typeof window !== 'undefined') {
-                // AuthProvider関連エラーの抑制
+                // AuthProvider関連エラーの抑制と無限ループ防止
+                let authErrorCount = 0;
+                let lastAuthErrorTime = 0;
+                
                 window.addEventListener('error', function(e) {
+                  const now = Date.now();
+                  
                   if (e.message && e.message.includes('useAuthProvider must be used within an AuthProvider')) {
-                    console.warn('⚠️ Suppressed AuthProvider context error from background process');
+                    authErrorCount++;
+                    const timeSinceLastError = now - lastAuthErrorTime;
+                    
+                    if (timeSinceLastError < 1000) {
+                      // 1秒以内に繰り返しエラーの場合、完全に抑制
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.stopImmediatePropagation();
+                      return false;
+                    }
+                    
+                    if (authErrorCount > 10) {
+                      console.error('🚨 Too many AuthProvider errors, forcing reload');
+                      window.location.reload();
+                      return false;
+                    }
+                    
+                    console.warn('⚠️ Suppressed AuthProvider context error #' + authErrorCount);
+                    lastAuthErrorTime = now;
                     e.preventDefault();
                     return false;
                   }
