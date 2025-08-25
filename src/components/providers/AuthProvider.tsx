@@ -13,6 +13,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, trainerName: string, schoolName: string) => Promise<void>
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  forceSignOut: () => Promise<void>
   createGuestSession: (guestName: string, schoolName: string) => Promise<void>
   authMethod: 'supabase' | 'local'
   error: string | null
@@ -33,18 +34,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         setIsLoading(true)
         
-        // Vercelデプロイ時の古い認証情報をクリーンアップ
+        // 古い認証情報のクリーンアップ（開発環境とVercelデプロイ時）
         if (typeof window !== 'undefined') {
           const currentUrl = window.location.href
           const isVercelDeploy = currentUrl.includes('vercel.app') || currentUrl.includes('vercel.com')
+          const isDev = process.env.NODE_ENV === 'development'
           
-          if (isVercelDeploy) {
-            console.log('🔐 AuthProvider: Vercelデプロイ検出、認証情報をクリーンアップ')
-            safeLocalStorage.removeItem('tokiwa_user')
-            safeLocalStorage.removeItem('supabase.auth.token')
-            safeLocalStorage.removeItem('supabase.auth.expires_at')
-            safeLocalStorage.removeItem('supabase.auth.refresh_token')
-            safeLocalStorage.removeItem('supabase.auth.access_token')
+          if (isVercelDeploy || isDev) {
+            console.log('🔐 AuthProvider: 古い認証情報をクリーンアップ', { isVercelDeploy, isDev })
+            
+            // 古いSupabaseセッション関連のキーをクリア
+            const keysToRemove = [
+              'supabase.auth.token',
+              'supabase.auth.expires_at',
+              'supabase.auth.refresh_token',
+              'supabase.auth.access_token',
+              'supabase.auth.user'
+            ]
+            
+            keysToRemove.forEach(key => {
+              safeLocalStorage.removeItem(key)
+            })
+            
+            // Supabaseのプリフィックス付きキーもクリア
+            Object.keys(localStorage).forEach(key => {
+              if (key.startsWith('sb-')) {
+                localStorage.removeItem(key)
+              }
+            })
           }
         }
         
@@ -175,6 +192,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     
     try {
+      // 既存セッションをクリア
+      if (supabase) {
+        await supabase.auth.signOut()
+      }
+      
       if (authMethod === 'supabase' && supabase) {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
@@ -213,6 +235,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     
     try {
+      // 既存セッションをクリア
+      if (supabase) {
+        await supabase.auth.signOut()
+      }
+      
       if (authMethod === 'supabase' && supabase) {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
@@ -249,6 +276,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const forceSignOut = async () => {
+    try {
+      console.log('🔐 AuthProvider: 強制ログアウト開始')
+      
+      // Supabaseセッションを強制的にクリア
+      if (supabase) {
+        await supabase.auth.signOut({ scope: 'global' })
+      }
+      
+      // ローカルストレージを完全にクリア
+      if (typeof window !== 'undefined') {
+        // Tokiwa関連のデータをクリア
+        safeLocalStorage.removeItem('tokiwa_user')
+        
+        // Supabase関連のデータをクリア
+        const keysToRemove = [
+          'supabase.auth.token',
+          'supabase.auth.expires_at', 
+          'supabase.auth.refresh_token',
+          'supabase.auth.access_token',
+          'supabase.auth.user',
+          'sb-' // Supabaseのプリフィックス付きキー
+        ]
+        
+        Object.keys(localStorage).forEach(key => {
+          if (keysToRemove.some(prefix => key.startsWith(prefix))) {
+            localStorage.removeItem(key)
+          }
+        })
+      }
+      
+      // 状態をリセット
+      setUser(null)
+      setError(null)
+      setAuthMethod('local')
+      
+      console.log('🔐 AuthProvider: 強制ログアウト完了')
+      
+      // ページをリロード
+      if (typeof window !== 'undefined') {
+        window.location.href = '/'
+      }
+      
+    } catch (error: any) {
+      console.error('🔐 強制ログアウトエラー:', error)
+      // エラーが発生してもページをリロード
+      if (typeof window !== 'undefined') {
+        window.location.href = '/'
+      }
+    }
+  }
+
   const createGuestSession = async (guestName: string, schoolName: string) => {
     const guestUser: User = {
       id: `guest_${Date.now()}`,
@@ -275,6 +354,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signIn, 
         signOut,
+        forceSignOut,
         createGuestSession,
         authMethod,
         error
@@ -323,6 +403,7 @@ export function useAuthProviderSafe() {
       signUp: async () => { throw new Error('Authentication context unavailable') },
       signIn: async () => { throw new Error('Authentication context unavailable') },
       signOut: async () => { throw new Error('Authentication context unavailable') },
+      forceSignOut: async () => { throw new Error('Authentication context unavailable') },
       createGuestSession: async () => { throw new Error('Authentication context unavailable') },
       authMethod: 'local' as const,
       error: 'Authentication context unavailable'

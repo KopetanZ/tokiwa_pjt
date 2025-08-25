@@ -18,7 +18,7 @@ function AuthWelcomeScreenClient() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
   // 安全にuseAuthProviderを使用
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuthProviderSafe()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useAuthProviderSafe()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
   // エラー表示の監視
@@ -36,10 +36,31 @@ function AuthWelcomeScreenClient() {
           トキワシティ訓練所
         </div>
         <div className="font-pixel text-retro-gb-mid">
-          ダッシュボードに移動中...
+          既にログインしています: {user.guestName}
         </div>
-        <div className="animate-pulse">
-          <div className="w-16 h-2 bg-retro-gb-mid mx-auto"></div>
+        <div className="space-y-4">
+          <PixelButton
+            onClick={() => window.location.href = '/dashboard'}
+            size="lg"
+          >
+            ダッシュボードへ
+          </PixelButton>
+          
+          {isDevelopment && (
+            <div className="space-y-2">
+              <div className="font-pixel text-xs text-yellow-600">
+                開発環境専用
+              </div>
+              <PixelButton
+                onClick={forceSignOut}
+                variant="secondary"
+                size="sm"
+                className="bg-red-300 hover:bg-red-400 text-red-800 border-red-600"
+              >
+                🔄 強制ログアウト
+              </PixelButton>
+            </div>
+          )}
         </div>
       </div>
     )
@@ -102,6 +123,16 @@ function AuthWelcomeScreenClient() {
 
   const handleQuickStart = async () => {
     try {
+      console.log('🎮 クイックスタート開始')
+      
+      // 既存セッションを強制的にクリア
+      if (forceSignOut) {
+        console.log('🔄 既存セッションをクリア中...')
+        await forceSignOut()
+        // forceSignOutはページをリロードするので、ここで処理は終了
+        return
+      }
+      
       if (createGuestSession) {
         await createGuestSession('開発者', 'テスト学校')
         showNotification('success', '🎮 開発モードでゲームを開始しました！')
@@ -109,6 +140,7 @@ function AuthWelcomeScreenClient() {
         showNotification('error', '認証システムが利用できません')
       }
     } catch (err) {
+      console.error('🎮 クイックスタートエラー:', err)
       showNotification('error', '開発モードの開始に失敗しました')
     }
   }
