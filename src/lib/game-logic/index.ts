@@ -17,7 +17,7 @@ export * from './trainer-system'
 import { expeditionSystem, ExpeditionParams, ExpeditionResult, EXPEDITION_LOCATIONS } from './expedition-system'
 import { pokemonSystem, PokemonSystem, CaptureAttempt } from './pokemon-system'
 import { economySystem, EconomySystem } from './economy-system'
-import { soundSystem, SoundSystem, playExpeditionStartSound, playPokemonCatchSound, playMoneySound, playLevelUpSound } from './sound-system'
+import { soundSystem, playExpeditionStartSound, playPokemonCatchSound, playMoneySound, playLevelUpSound } from './sound-system'
 import { TrainerSystem } from './trainer-system'
 import { gameRandom } from './random-system'
 import { supabase } from '../supabase'
@@ -162,7 +162,7 @@ export class GameController {
         
         // お金獲得音再生
         if (moneyGained > 0) {
-          playMoneySound(moneyGained)
+          playMoneySound()
           soundsPlayed.push('money_gain')
         }
       }
@@ -964,7 +964,7 @@ export class GameController {
   // デバッグ用: 資金追加
   addDebugMoney(amount: number) {
     this.economySystem.recordIncome('bonus', amount, 'デバッグ用資金追加', 'debug')
-    playMoneySound(amount)
+    playMoneySound()
   }
   
   // デバッグ用: ランダムポケモン生成

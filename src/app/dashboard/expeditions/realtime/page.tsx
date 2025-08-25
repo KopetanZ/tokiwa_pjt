@@ -14,12 +14,12 @@ import { useState, useEffect } from 'react'
 const sampleExpeditions = [
   {
     id: 'mock-expedition-1',
-    trainer: { id: 'mock-trainer-1', name: 'タケシ', job: 'レンジャー' },
+    trainer: { id: 'mock-trainer-2', name: 'カスミ', job: 'バトラー' },
     location: { nameJa: 'トキワの森' }
   },
   {
     id: 'mock-expedition-2', 
-    trainer: { id: 'mock-trainer-2', name: 'カスミ', job: 'バトラー' },
+    trainer: { id: 'mock-trainer-1', name: 'タケシ', job: 'レンジャー' },
     location: { nameJa: '22番道路' }
   }
 ]
@@ -32,6 +32,7 @@ export default function RealtimeExpeditionsPage() {
   
   const [activeExpeditions, setActiveExpeditions] = useState<any[]>([])
   const [realExpeditionData, setRealExpeditionData] = useState<any>(null)
+  const [completedExpeditions, setCompletedExpeditions] = useState<any[]>([])
   const [stats, setStats] = useState({
     active: 0,
     interventionsRequired: 0,
@@ -94,6 +95,33 @@ export default function RealtimeExpeditionsPage() {
         }, index * 2000) // 2秒間隔で開始
       })
     }
+
+    // 派遣完了イベントのリスナーを設定
+    sampleExpeditions.forEach(exp => {
+      realtimeSystem.addEventListener(exp.id, (eventType: string, data: any) => {
+        if (eventType === 'expedition_complete') {
+          setCompletedExpeditions(prev => [...prev, {
+            id: exp.id,
+            trainer: exp.trainer,
+            location: exp.location,
+            reward: data.finalReward,
+            completedAt: new Date()
+          }])
+          setActiveExpeditions(prev => prev.filter(e => e.expeditionId !== exp.id))
+        } else if (eventType === 'expedition_cancelled') {
+          // 派遣キャンセル時の処理
+          setCompletedExpeditions(prev => [...prev, {
+            id: exp.id,
+            trainer: exp.trainer,
+            location: exp.location,
+            reward: data.partialReward,
+            completedAt: new Date(),
+            status: 'cancelled'
+          }])
+          setActiveExpeditions(prev => prev.filter(e => e.expeditionId !== exp.id))
+        }
+      })
+    })
 
     // 統計更新用の定期タイマー
     const statsInterval = setInterval(() => {
@@ -264,6 +292,64 @@ export default function RealtimeExpeditionsPage() {
           </PixelCard>
         )}
       </div>
+
+      {/* 完了した派遣一覧 */}
+      {completedExpeditions.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="font-pixel text-lg text-retro-gb-dark">
+            完了した派遣 ({completedExpeditions.length})
+          </h2>
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {completedExpeditions.map(exp => (
+              <PixelCard key={exp.id} title={`${exp.trainer.name} - ${exp.location.nameJa}`}>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <div className="font-pixel text-sm text-retro-gb-mid">
+                      完了時刻: {exp.completedAt.toLocaleTimeString()}
+                    </div>
+                    <div className="font-pixel text-lg text-green-600">
+                      ₽{exp.reward.toLocaleString()}
+                    </div>
+                  </div>
+                  
+                  {exp.status === 'cancelled' && (
+                    <div className="bg-yellow-100 border border-yellow-300 p-2 rounded">
+                      <div className="font-pixel text-xs text-yellow-800 text-center">
+                        ⚠️ 派遣キャンセル済み（部分報酬）
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="flex space-x-2">
+                    <PixelButton
+                      size="sm"
+                      onClick={() => {
+                        // 報酬を取得
+                        setCompletedExpeditions(prev => prev.filter(e => e.id !== exp.id))
+                        // ここで実際の報酬処理を行う
+                        alert(`報酬 ${exp.reward} を取得しました！`)
+                      }}
+                    >
+                      報酬を取得
+                    </PixelButton>
+                    
+                    <PixelButton
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setCompletedExpeditions(prev => prev.filter(e => e.id !== exp.id))
+                      }}
+                    >
+                      破棄
+                    </PixelButton>
+                  </div>
+                </div>
+              </PixelCard>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* リアルタイム介入ガイド */}
       <PixelCard title="リアルタイム介入システムについて">

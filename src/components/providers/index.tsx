@@ -2,14 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ThemeProvider } from './ThemeProvider'
 import { AuthProvider } from './AuthProvider'
-import { ToastProvider } from './ToastProvider'
-import { GameProvider } from '@/contexts/GameContext'
-import { DataSystemProvider } from './DataSystemProvider'
-import { MusicProvider } from './MusicProvider'
-import { DataBridge } from '@/lib/data-bridge/DataBridge'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { SimpleGameProvider } from '@/contexts/SimpleGameContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -26,32 +21,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
       })
   )
 
-  // データシステムの設定
-  const dataSystemConfig = {
-    enableSync: false, // まずは同期機能を無効にして安全にテスト
-    enableValidation: true,
-    debug: process.env.NODE_ENV === 'development',
-    unified: {
-      autoSave: {
-        enabled: true,
-        interval: 5,
-        onDataChange: true,
-        onUserAction: false
-      },
-      backup: {
-        enabled: true,
-        maxBackups: 5,
-        autoBackupInterval: 24,
-        compressBackups: true
-      },
-      validation: {
-        enabled: true,
-        autoValidate: true,
-        validationInterval: 15, // 15分間隔
-        autoRepair: false // 自動修復は無効にして安全性を確保
-      }
-    }
-  }
+  // 簡素化: 過剰なデータシステム設定を削除
 
   return (
     <ErrorBoundary
@@ -78,20 +48,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       }
     >
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <AuthProvider>
-            <DataSystemProvider config={dataSystemConfig}>
-              <GameProvider>
-                <MusicProvider>
-                  <ToastProvider>
-                    <DataBridge />
-                    {children}
-                  </ToastProvider>
-                </MusicProvider>
-              </GameProvider>
-            </DataSystemProvider>
-          </AuthProvider>
-        </ThemeProvider>
+        <AuthProvider>
+          <SimpleGameProvider>
+            {children}
+          </SimpleGameProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   )

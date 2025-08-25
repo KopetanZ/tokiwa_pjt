@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/GameContext'
 import { GameBoyScreen } from '@/components/layout/GameBoyScreen'
 import { PixelNavigation } from '@/components/layout/PixelNavigation'
 import { StatusBar } from '@/components/layout/StatusBar'
-import { FloatingMusicButton } from '@/components/audio/MusicController'
+// import { FloatingMusicButton } from '@/components/audio/MusicController' // 簡素化のため削除
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
@@ -94,7 +94,7 @@ export default function DashboardLayout({
         </div>
         
         {/* フローティング音楽ボタン */}
-        <FloatingMusicButton />
+        {/* <FloatingMusicButton /> 簡素化のため削除 */}
       </div>
     </GameBoyScreen>
   )

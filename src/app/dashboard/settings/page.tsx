@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { SettingsManager, UserSettings, DEFAULT_SETTINGS } from '@/lib/settings-integration'
 import { getSafeGameData } from '@/lib/data-utils'
 import { UI } from '@/config/app'
-import { DetailedMusicController } from '@/components/audio/MusicController'
+// import { DetailedMusicController } from '@/components/audio/MusicController' // 簡素化のため削除
 
 export default function SettingsPage() {
   const { gameData } = useGameState()
@@ -576,7 +576,7 @@ export default function SettingsPage() {
       <PixelCard>
         <div className="p-6">
           <h2 className="font-pixel text-lg text-retro-gb-dark mb-4">🎵 音楽制御</h2>
-          <DetailedMusicController />
+          {/* <DetailedMusicController /> 簡素化のため削除 */}
         </div>
       </PixelCard>
 

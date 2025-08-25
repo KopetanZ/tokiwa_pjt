@@ -27,7 +27,7 @@ export interface ExpeditionEvent {
   playerResponseRequired: boolean
   responseDeadline?: Date
   autoResolveTime: number // 秒
-  status: 'pending' | 'responded' | 'auto_resolved' | 'expired'
+  status: 'pending' | 'responded' | 'auto_resolved' | 'expired' | 'cancelled'
 }
 
 export interface PlayerResponse {
@@ -40,14 +40,15 @@ export interface PlayerResponse {
 export interface ExpeditionProgress {
   expeditionId: string
   trainerId: string
-  progress: number // 0-100
-  currentStage: string
+  progress: number
+  currentStage: 'preparation' | 'exploration' | 'encounter' | 'collection' | 'return'
   timeElapsed: number
   timeRemaining: number
   events: ExpeditionEvent[]
   totalReward: number
   riskLevel: number
   successProbability: number
+  status: 'active' | 'completed' | 'cancelled'
 }
 
 // リアルタイム介入管理クラス
@@ -66,9 +67,10 @@ class RealtimeInterventionSystem {
       timeElapsed: 0,
       timeRemaining: duration * 60 * 1000, // 分→ミリ秒
       events: [],
-      totalReward: 0,
+      totalReward: 1, // 初期報酬は1
       riskLevel: 1,
-      successProbability: 85
+      successProbability: 85,
+      status: 'active'
     }
     
     this.activeExpeditions.set(expeditionId, progress)
@@ -376,6 +378,54 @@ class RealtimeInterventionSystem {
     }
     this.activeExpeditions.delete(expeditionId)
     this.eventListeners.delete(expeditionId)
+  }
+
+  // 派遣キャンセル（新規追加）
+  cancelExpedition(expeditionId: string): boolean {
+    const progress = this.activeExpeditions.get(expeditionId)
+    if (!progress) return false
+    
+    // シミュレーション停止
+    const interval = this.simulationIntervals.get(expeditionId)
+    if (interval) {
+      clearInterval(interval)
+      this.simulationIntervals.delete(expeditionId)
+    }
+    
+    // 派遣状態をキャンセル済みに変更
+    progress.status = 'cancelled'
+    
+    // リスナーに通知
+    this.notifyListeners(expeditionId, 'expedition_cancelled', {
+      expeditionId,
+      reason: 'user_cancelled',
+      partialReward: Math.floor(progress.totalReward * 0.3) // 30%の部分報酬
+    })
+    
+    // クリーンアップ
+    this.activeExpeditions.delete(expeditionId)
+    this.eventListeners.delete(expeditionId)
+    
+    return true
+  }
+
+  // 派遣状態の取得（改善版）
+  getExpeditionStatus(expeditionId: string): 'active' | 'completed' | 'cancelled' | 'not_found' {
+    const progress = this.activeExpeditions.get(expeditionId)
+    if (!progress) return 'not_found'
+    
+    if (progress.status === 'cancelled') return 'cancelled'
+    if (progress.timeRemaining <= 0) return 'completed'
+    return 'active'
+  }
+
+  // 派遣の強制完了（デバッグ用）
+  forceCompleteExpedition(expeditionId: string): boolean {
+    const progress = this.activeExpeditions.get(expeditionId)
+    if (!progress) return false
+    
+    this.completeExpedition(expeditionId)
+    return true
   }
 }
 

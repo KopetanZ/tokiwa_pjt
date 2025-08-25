@@ -145,6 +145,10 @@ function AuthWelcomeScreenClient() {
         await signUp(email, password, trainerName, schoolName)
         if (!error) {
           showNotification('success', `${schoolName}へようこそ、${trainerName}館長！`)
+          // サインアップ成功後にダッシュボードに遷移
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 1000)
         }
       } else {
         showNotification('error', '認証システムが利用できません')
@@ -165,6 +169,10 @@ function AuthWelcomeScreenClient() {
         await signIn(email, password)
         if (!error) {
           showNotification('success', 'おかえりなさい！')
+          // ログイン成功後にダッシュボードに遷移
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 1000)
         }
       } else {
         showNotification('error', '認証システムが利用できません')

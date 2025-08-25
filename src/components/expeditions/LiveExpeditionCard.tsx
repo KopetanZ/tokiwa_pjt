@@ -266,13 +266,27 @@ export function LiveExpeditionCard({
             </PixelButton>
             
             {!hasNewEvent && (
-              <PixelButton
-                size="sm"
-                variant="secondary"
-                onClick={() => realtimeSystem.stopExpedition(expeditionId)}
-              >
-                早期帰還
-              </PixelButton>
+              <>
+                <PixelButton
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => realtimeSystem.stopExpedition(expeditionId)}
+                >
+                  早期帰還
+                </PixelButton>
+                
+                <PixelButton
+                  size="sm"
+                  variant="danger"
+                  onClick={() => {
+                    if (confirm('この派遣をキャンセルしますか？部分報酬のみ受け取れます。')) {
+                      realtimeSystem.cancelExpedition(expeditionId)
+                    }
+                  }}
+                >
+                  キャンセル
+                </PixelButton>
+              </>
             )}
           </div>
         </div>

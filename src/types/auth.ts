@@ -1,5 +1,7 @@
 export interface User {
   id: string
+  email?: string
+  password?: string
   guestName: string
   schoolName: string
   currentMoney: number
