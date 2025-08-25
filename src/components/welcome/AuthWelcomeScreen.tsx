@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuthProvider } from '../providers/AuthProvider'
+import { useAuthProviderSafe } from '../providers/AuthProvider'
 import { sanitizeEmail, sanitizeTrainerName, sanitizeSchoolName } from '@/utils/inputSanitizer'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 
@@ -20,7 +20,7 @@ function AuthWelcomeScreenClient() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
   // AuthProviderから認証情報を取得し、メモ化で再レンダーを抑制
-  const authData = useAuthProvider()
+  const authData = useAuthProviderSafe()
   const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useMemo(() => authData, [authData])
   const isDevelopment = process.env.NODE_ENV === 'development'
 
