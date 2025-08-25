@@ -370,7 +370,9 @@ export class AuthSessionManager {
         } : null
       }
 
-      localStorage.setItem(SESSION_CONFIG.sessionStorageKey, JSON.stringify(stateToSave))
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(SESSION_CONFIG.sessionStorageKey, JSON.stringify(stateToSave))
+      }
     } catch (error) {
       console.warn('セッション状態の保存に失敗:', error)
     }

@@ -115,6 +115,8 @@ export async function saveUserSettings(
 // localStorageから設定を取得
 export function getLocalSettings(): UserSettings {
   try {
+    if (typeof window === 'undefined') return DEFAULT_SETTINGS
+    
     const saved = localStorage.getItem(SETTINGS_STORAGE_KEY)
     if (saved) {
       const parsed = JSON.parse(saved)
@@ -133,6 +135,8 @@ export function getLocalSettings(): UserSettings {
 // localStorageに設定を保存
 export function saveLocalSettings(settings: UserSettings): void {
   try {
+    if (typeof window === 'undefined') return
+    
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
   } catch (error) {
     console.error('ローカル設定保存エラー:', error)

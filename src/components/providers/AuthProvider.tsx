@@ -383,6 +383,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 let isInErrorContext = false
 
 export function useAuthProvider() {
+  // Always call useContext first (React Hooks rules)
+  const context = useContext(AuthContext)
+  
   // Prevent infinite recursion
   if (isInErrorContext) {
     console.warn('🚨 Infinite recursion detected in useAuthProvider, returning safe fallback')
@@ -399,8 +402,6 @@ export function useAuthProvider() {
       error: null
     }
   }
-  
-  const context = useContext(AuthContext)
   if (context === undefined) {
     // Set flag to prevent infinite recursion
     isInErrorContext = true

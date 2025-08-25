@@ -336,6 +336,11 @@ export class GameStateManager {
    */
   saveToLocal(): void {
     try {
+      // サーバーサイドレンダリング時はlocalStorageアクセスを回避
+      if (typeof window === 'undefined') {
+        return
+      }
+      
       this.data.lastSaved = new Date().toISOString()
       const serialized = JSON.stringify(this.data, null, 2)
       localStorage.setItem(GameStateManager.STORAGE_KEY, serialized)
@@ -357,6 +362,11 @@ export class GameStateManager {
    */
   private loadFromLocal(): GameData | null {
     try {
+      // サーバーサイドレンダリング時はlocalStorageアクセスを回避
+      if (typeof window === 'undefined') {
+        return null
+      }
+      
       const stored = localStorage.getItem(GameStateManager.STORAGE_KEY)
       if (!stored) return null
       
