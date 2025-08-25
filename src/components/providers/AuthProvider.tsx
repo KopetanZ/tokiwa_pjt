@@ -26,6 +26,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [authMethod, setAuthMethod] = useState<'supabase' | 'local'>('local')
   const [error, setError] = useState<string | null>(null)
+  const [isInitialized, setIsInitialized] = useState(false)
   const router = useRouter()
   
   // 初期化処理
@@ -127,6 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isLoading: false 
         })
         setIsLoading(false)
+        setIsInitialized(true)
       }
     }
 
@@ -343,6 +345,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(guestUser)
     safeLocalStorage.setItem('tokiwa_user', JSON.stringify(guestUser))
     router.push('/dashboard')
+  }
+
+  // 初期化が完了するまで待機
+  if (!isInitialized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center space-y-4">
+          <div className="font-pixel text-retro-gb-dark">システム初期化中...</div>
+          <div className="w-16 h-2 bg-retro-gb-mid mx-auto animate-pulse"></div>
+        </div>
+      </div>
+    )
   }
 
   return (

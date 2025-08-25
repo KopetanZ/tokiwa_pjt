@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuthProviderSafe } from '../providers/AuthProvider'
+import { useAuthProvider } from '../providers/AuthProvider'
 
 // SSRを無効化
 export const dynamic = 'force-dynamic'
@@ -17,13 +17,13 @@ function AuthWelcomeScreenClient() {
   const [schoolName, setSchoolName] = useState('')
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
-  // 安全にuseAuthProviderを使用
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useAuthProviderSafe()
+  // AuthProviderから認証情報を取得
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, forceSignOut, error } = useAuthProvider()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
-  // エラー表示の監視
+  // エラー表示の監視（ただし、fallback状態のエラーは除外）
   useEffect(() => {
-    if (error) {
+    if (error && error !== 'Authentication context unavailable') {
       showNotification('error', error)
     }
   }, [error])
@@ -310,13 +310,20 @@ function AuthWelcomeScreenClient() {
 
 export function AuthWelcomeScreen() {
   const [isClient, setIsClient] = useState(false)
+  const [isAuthReady, setIsAuthReady] = useState(false)
 
   useEffect(() => {
     setIsClient(true)
+    // AuthProviderが確実に初期化されるよう少し待機
+    const timer = setTimeout(() => {
+      setIsAuthReady(true)
+    }, 100)
+    
+    return () => clearTimeout(timer)
   }, [])
 
   // クライアントサイドでのみレンダリング
-  if (!isClient) {
+  if (!isClient || !isAuthReady) {
     return (
       <div className="text-center space-y-6">
         <div className="font-pixel-xl text-retro-gb-dark">
