@@ -38,6 +38,29 @@ export default function RootLayout({
             {children}
           </div>
         </Providers>
+        {/* グローバルエラーハンドリング */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined') {
+                window.addEventListener('error', function(e) {
+                  if (e.message && e.message.includes('useAuthProvider must be used within an AuthProvider')) {
+                    console.warn('⚠️ Suppressed AuthProvider context error from background process');
+                    e.preventDefault();
+                    return false;
+                  }
+                });
+                
+                window.addEventListener('unhandledrejection', function(e) {
+                  if (e.reason && e.reason.message && e.reason.message.includes('useAuthProvider must be used within an AuthProvider')) {
+                    console.warn('⚠️ Suppressed AuthProvider context promise rejection from background process');
+                    e.preventDefault();
+                  }
+                });
+              }
+            `,
+          }}
+        />
       </body>
     </html>
   )

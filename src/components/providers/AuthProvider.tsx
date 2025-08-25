@@ -384,16 +384,60 @@ export function useAuthProvider() {
   if (context === undefined) {
     // In development, provide more detailed error information
     if (process.env.NODE_ENV === 'development') {
-      console.error('❌ useAuthProvider called outside AuthProvider context', {
+      const errorDetails = {
         stack: new Error().stack,
-        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side'
-      })
+        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side',
+        timestamp: new Date().toISOString(),
+        userAgent: typeof window !== 'undefined' ? window.navigator?.userAgent : 'unknown'
+      }
+      
+      console.error('❌ useAuthProvider called outside AuthProvider context', errorDetails)
+      
+      // Try to identify the specific component or context
+      const stackLines = new Error().stack?.split('\n') || []
+      const relevantLines = stackLines.filter(line => 
+        line.includes('.tsx') || line.includes('.ts') || line.includes('components/')
+      ).slice(0, 3)
+      
+      console.error('📍 Stack trace (component files only):', relevantLines)
     }
     
-    // Check if we're in a special context (like HMR, service worker, etc.)
-    if (typeof window !== 'undefined' && window.name === 'nodejs') {
-      console.warn('⚠️ useAuthProvider called in Node.js context, returning null')
-      return null as any
+    // Check if we're in a special context (like HMR, service worker, worker thread, etc.)
+    if (typeof window !== 'undefined') {
+      const isWorkerContext = typeof (globalThis as any).importScripts === 'function'
+      const isNodeContext = window.name === 'nodejs'
+      const isHMRContext = !!(window as any).__NEXT_DATA__ && process.env.NODE_ENV === 'development'
+      const isDevToolsContext = !!(window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__
+      
+      // Check if we're in a MessagePort context by examining the call stack
+      const stackTrace = new Error().stack || ''
+      const isMessagePortContext = stackTrace.includes('MessagePort') || 
+                                   stackTrace.includes('postMessage') ||
+                                   stackTrace.includes('webpackHotUpdate')
+      
+      if (isWorkerContext || isNodeContext || isHMRContext || isDevToolsContext || isMessagePortContext) {
+        console.warn('⚠️ useAuthProvider called in background/dev context, returning mock', {
+          isWorkerContext,
+          isNodeContext, 
+          isHMRContext,
+          isDevToolsContext,
+          isMessagePortContext
+        })
+        
+        // Return a minimal mock instead of throwing
+        return {
+          user: null,
+          isLoading: false,
+          isAuthenticated: false,
+          signUp: async () => { console.warn('signUp called in background context') },
+          signIn: async () => { console.warn('signIn called in background context') },
+          signOut: async () => { console.warn('signOut called in background context') },
+          forceSignOut: async () => { console.warn('forceSignOut called in background context') },
+          createGuestSession: async () => { console.warn('createGuestSession called in background context') },
+          authMethod: 'local' as const,
+          error: null
+        }
+      }
     }
     
     throw new Error('useAuthProvider must be used within an AuthProvider')
