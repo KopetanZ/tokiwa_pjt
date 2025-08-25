@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
 import { useAuthProvider } from '../providers/AuthProvider'
+import { sanitizeEmail, sanitizeTrainerName, sanitizeSchoolName } from '@/utils/inputSanitizer'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 // SSRを無効化
 export const dynamic = 'force-dynamic'
@@ -209,7 +211,15 @@ function AuthWelcomeScreenClient() {
             type="email"
             placeholder="trainer@tokiwa.school"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              try {
+                const sanitizedValue = sanitizeEmail(e.target.value || '')
+                setEmail(sanitizedValue)
+              } catch (error) {
+                console.warn('⚠️ Email input error:', error)
+                // エラーの場合は現在の値を保持
+              }
+            }}
             disabled={isLoading}
           />
         </div>
@@ -222,7 +232,16 @@ function AuthWelcomeScreenClient() {
             type="password"
             placeholder="6文字以上"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(e) => {
+              try {
+                // パスワードは基本的なnullチェックのみ
+                const value = e.target.value || ''
+                setPassword(value)
+              } catch (error) {
+                console.warn('⚠️ Password input error:', error)
+                // エラーの場合は現在の値を保持
+              }
+            }}
             disabled={isLoading}
           />
         </div>
@@ -237,7 +256,15 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="サトシ"
                 value={trainerName}
-                onChange={(e) => setTrainerName(e.target.value)}
+                onChange={(e) => {
+                  try {
+                    const sanitizedValue = sanitizeTrainerName(e.target.value || '')
+                    setTrainerName(sanitizedValue)
+                  } catch (error) {
+                    console.warn('⚠️ Trainer name input error:', error)
+                    showNotification('warning', '入力中にエラーが発生しました')
+                  }
+                }}
                 maxLength={20}
                 disabled={isLoading}
               />
@@ -251,7 +278,15 @@ function AuthWelcomeScreenClient() {
                 type="text"
                 placeholder="マサラタウン育成学校"
                 value={schoolName}
-                onChange={(e) => setSchoolName(e.target.value)}
+                onChange={(e) => {
+                  try {
+                    const sanitizedValue = sanitizeSchoolName(e.target.value || '')
+                    setSchoolName(sanitizedValue)
+                  } catch (error) {
+                    console.warn('⚠️ School name input error:', error)
+                    showNotification('warning', '入力中にエラーが発生しました')
+                  }
+                }}
                 maxLength={50}
                 disabled={isLoading}
               />
@@ -339,5 +374,26 @@ export function AuthWelcomeScreen() {
     )
   }
 
-  return <AuthWelcomeScreenClient />
+  return (
+    <ErrorBoundary
+      fallback={
+        <div className="p-6 text-center space-y-4">
+          <div className="font-pixel-xl text-retro-gb-dark">
+            トキワシティ訓練所
+          </div>
+          <div className="font-pixel text-red-600">
+            ⚠️ 認証画面でエラーが発生しました
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="font-pixel text-sm px-4 py-2 bg-retro-gb-light border-2 border-retro-gb-mid hover:bg-retro-gb-mid transition-colors"
+          >
+            🔄 ページを再読み込み
+          </button>
+        </div>
+      }
+    >
+      <AuthWelcomeScreenClient />
+    </ErrorBoundary>
+  )
 }

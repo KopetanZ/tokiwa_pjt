@@ -206,7 +206,15 @@ function WelcomeScreenClient() {
             type="text"
             placeholder="サトシ"
             value={guestName}
-            onChange={(e) => setGuestName(e.target.value)}
+            onChange={(e) => {
+              try {
+                const value = e.target.value || ''
+                const sanitized = value.substring(0, 20) // maxLength制限
+                setGuestName(sanitized)
+              } catch (error) {
+                console.warn('⚠️ Guest name input error:', error)
+              }
+            }}
             maxLength={20}
             disabled={isLoading}
           />
@@ -220,7 +228,15 @@ function WelcomeScreenClient() {
             type="text"
             placeholder="マサラタウン育成学校"
             value={schoolName}
-            onChange={(e) => setSchoolName(e.target.value)}
+            onChange={(e) => {
+              try {
+                const value = e.target.value || ''
+                const sanitized = value.substring(0, 50) // maxLength制限
+                setSchoolName(sanitized)
+              } catch (error) {
+                console.warn('⚠️ School name input error:', error)
+              }
+            }}
             maxLength={50}
             disabled={isLoading}
           />

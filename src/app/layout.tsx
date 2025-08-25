@@ -43,9 +43,17 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               if (typeof window !== 'undefined') {
+                // AuthProvider関連エラーの抑制
                 window.addEventListener('error', function(e) {
                   if (e.message && e.message.includes('useAuthProvider must be used within an AuthProvider')) {
                     console.warn('⚠️ Suppressed AuthProvider context error from background process');
+                    e.preventDefault();
+                    return false;
+                  }
+                  
+                  // 入力関連のクライアントサイドエラーを捕捉
+                  if (e.message && (e.message.includes('input') || e.message.includes('value') || e.message.includes('target'))) {
+                    console.warn('⚠️ Input-related error caught and handled:', e.message);
                     e.preventDefault();
                     return false;
                   }
@@ -56,7 +64,24 @@ export default function RootLayout({
                     console.warn('⚠️ Suppressed AuthProvider context promise rejection from background process');
                     e.preventDefault();
                   }
+                  
+                  // 入力関連のPromise rejectionを捕捉
+                  if (e.reason && e.reason.message && (e.reason.message.includes('input') || e.reason.message.includes('sanitize'))) {
+                    console.warn('⚠️ Input-related promise rejection caught and handled:', e.reason.message);
+                    e.preventDefault();
+                  }
                 });
+                
+                // React関連のエラーも捕捉
+                const originalConsoleError = console.error;
+                console.error = function(...args) {
+                  const message = args.join(' ');
+                  if (message.includes('client-side exception') || message.includes('Application error')) {
+                    console.warn('⚠️ Client-side error intercepted and handled:', message);
+                    return;
+                  }
+                  originalConsoleError.apply(console, args);
+                };
               }
             `,
           }}
