@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuthProvider } from '@/components/providers/AuthProvider'
+import { useAuthProviderSafe } from '@/components/providers/AuthProvider'
 // import { useToast } from '@/components/providers/ToastProvider'
 
 function WelcomeScreenClient() {
@@ -13,7 +13,8 @@ function WelcomeScreenClient() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
-  const { user, isAuthenticated, isLoading: authLoading, createGuestSession, authMethod } = useAuthProvider()
+  // 安全にuseAuthProviderを使用
+  const { user, isAuthenticated, isLoading: authLoading, createGuestSession, authMethod } = useAuthProviderSafe()
   // const { addToast } = useToast()
   const isDevelopment = process.env.NODE_ENV === 'development'
   const router = useRouter()

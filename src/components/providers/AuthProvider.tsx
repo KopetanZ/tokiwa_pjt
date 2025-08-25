@@ -292,10 +292,41 @@ export function useAuthProvider() {
     if (process.env.NODE_ENV === 'development') {
       console.error('❌ useAuthProvider called outside AuthProvider context', {
         stack: new Error().stack,
-        location: window?.location?.href || 'unknown'
+        location: typeof window !== 'undefined' ? window?.location?.href : 'server-side'
       })
     }
+    
+    // Check if we're in a special context (like HMR, service worker, etc.)
+    if (typeof window !== 'undefined' && window.name === 'nodejs') {
+      console.warn('⚠️ useAuthProvider called in Node.js context, returning null')
+      return null as any
+    }
+    
     throw new Error('useAuthProvider must be used within an AuthProvider')
+  }
+  return context
+}
+
+// Safe version of useAuthProvider that returns fallback values instead of throwing
+export function useAuthProviderSafe() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    // In development, provide more detailed error information
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('⚠️ useAuthProviderSafe called outside AuthProvider context, returning fallback')
+    }
+    
+    return {
+      user: null,
+      isLoading: false,
+      isAuthenticated: false,
+      signUp: async () => { throw new Error('Authentication context unavailable') },
+      signIn: async () => { throw new Error('Authentication context unavailable') },
+      signOut: async () => { throw new Error('Authentication context unavailable') },
+      createGuestSession: async () => { throw new Error('Authentication context unavailable') },
+      authMethod: 'local' as const,
+      error: 'Authentication context unavailable'
+    }
   }
   return context
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { PixelButton } from '@/components/ui/PixelButton'
 import { PixelInput } from '@/components/ui/PixelInput'
-import { useAuthProvider } from '../providers/AuthProvider'
+import { useAuthProviderSafe } from '../providers/AuthProvider'
 
 // SSRを無効化
 export const dynamic = 'force-dynamic'
@@ -18,7 +18,7 @@ function AuthWelcomeScreenClient() {
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'warning' | 'info'; message: string } | null>(null)
   
   // 安全にuseAuthProviderを使用
-  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuthProvider()
+  const { user, isAuthenticated, isLoading, signUp, signIn, createGuestSession, error } = useAuthProviderSafe()
   const isDevelopment = process.env.NODE_ENV === 'development'
 
   // エラー表示の監視
